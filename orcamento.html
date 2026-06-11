@@ -37,7 +37,7 @@
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Categoria</th><th class="col-num">Valor total</th>
+          <th>Descrição</th><th class="col-num">Valor total</th>
           <th class="col-num">Distribuído</th><th class="col-num">Saldo</th><th class="col-actions">Ações</th>
         </tr></thead>
         <tbody id="tbody-dotacoes">
@@ -81,7 +81,7 @@
       <h2>Nova dotação</h2>
       <p>Crie uma linha orçamentária para sua unidade neste exercício.</p>
       <div class="form-group" style="margin-bottom:12px">
-        <label>Categoria <span style="color:#EF4444">*</span></label>
+        <label>Descrição <span style="color:#EF4444">*</span></label>
         <input type="text" id="nd-categoria" placeholder="Ex: Custeio – Materiais de Consumo">
         <span class="field-error" id="nd-cat-err" style="display:none"></span>
       </div>
@@ -146,8 +146,8 @@
     setLoading(this, true);
     try {
       await criarDotacao({
-        campus_id: perfil.campus_id, unidade_id: perfil.unidade_id,
-        exercicio: parseInt(selEx.value), categoria: cat, valor_total: val, valor_distribuido: 0
+        campus_id: perfil.campus_id,
+        exercicio: parseInt(selEx.value), descricao: cat, valor_total: val
       });
       document.getElementById('modal-dotacao').style.display = 'none';
       showToast('Dotação criada.', 'success');
@@ -169,7 +169,7 @@
     tbody.innerHTML = '<tr><td colspan="5"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>';
     try {
       const todas = await listarDotacoes(perfil.campus_id, exercicio);
-      _dotacoes = todas.filter(d => d.unidade_id === perfil.unidade_id);
+      _dotacoes = todas; // todas as dotações do campus
 
       // Carregar filhos para distribuição
       _filhos = await listarFilhosDiretos(perfil.unidade_id);
@@ -194,7 +194,7 @@
         _dotacoes = rows;
 
         tbody.innerHTML = rows.map(d => `<tr>
-          <td>${d.categoria}</td>
+          <td>${d.descricao || '—'}</td>
           <td class="col-num">${formatMoeda(d.valor_total)}</td>
           <td class="col-num">${formatMoeda(d.distribuido)}</td>
           <td class="col-num" style="font-weight:600;color:${d.saldo<0?'#EF4444':'#166534'}">${formatMoeda(d.saldo)}</td>
@@ -206,7 +206,7 @@
 
         // Popular select de distribuição
         const sel = document.getElementById('sel-dotacao-dist');
-        sel.innerHTML = _dotacoes.map(d => `<option value="${d.id}">${d.categoria} (saldo: ${formatMoeda(d.saldo)})</option>`).join('');
+        sel.innerHTML = _dotacoes.map(d => `<option value="${d.id}">${d.descricao || 'Dotação'} (saldo: ${formatMoeda(d.saldo)})</option>`).join('');
         sel.addEventListener('change', atualizarSaldoDisplay);
         atualizarSaldoDisplay();
         renderFormDistribuicao();
@@ -258,9 +258,9 @@
     try {
       for (const d of distribuicoes) {
         await criarDistribuicao({
-          dotacao_id: dotId, campus_id: perfil.campus_id,
-          unidade_destino_id: d.unidade.id, valor: d.valor,
-          criado_por: perfil.id
+          dotacao_id: dotId,
+          unidade_id: d.unidade.id,
+          valor: d.valor
         });
       }
       showToast('Distribuições salvas.', 'success');
@@ -288,16 +288,16 @@
     const el = document.getElementById('lista-recebidos');
     try {
       const dists = await listarDistribuicoes(perfil.campus_id, exercicio);
-      const minhas = dists.filter(d => d.unidade_destino_id === perfil.unidade_id);
+      const minhas = dists.filter(d => d.unidade_id === perfil.unidade_id);
       if (minhas.length === 0) {
         el.innerHTML = '<div class="empty-state"><p>Nenhum orçamento recebido para este exercício.</p></div>';
       } else {
         const total = minhas.reduce((s,d) => s+Number(d.valor), 0);
         el.innerHTML = `<table><thead><tr>
-          <th>Categoria</th><th class="col-num">Valor recebido</th><th>Obs.</th>
+          <th>Descrição</th><th class="col-num">Valor recebido</th><th>Obs.</th>
         </tr></thead><tbody>
           ${minhas.map(d => `<tr>
-            <td>${d.dotacao ? d.dotacao.categoria : '—'}</td>
+            <td>${d.dotacao ? (d.dotacao.descricao || '—') : '—'}</td>
             <td class="col-num">${formatMoeda(d.valor)}</td>
             <td style="color:var(--cinza-medio)">${d.observacao||'—'}</td>
           </tr>`).join('')}
