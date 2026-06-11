@@ -8,7 +8,6 @@
 </head>
 <body>
 
-<!-- ── Header ─────────────────────────────────────────────── -->
 <header id="app-header">
   <div class="header-left">
     <button id="btn-menu-mobile">☰</button>
@@ -25,12 +24,10 @@
   </div>
 </header>
 
-<!-- ── Sidebar ─────────────────────────────────────────────── -->
 <aside id="app-sidebar">
   <nav id="sidebar-nav"></nav>
 </aside>
 
-<!-- ── Conteúdo ────────────────────────────────────────────── -->
 <main id="app-main">
   <div class="page-header">
     <div>
@@ -43,7 +40,6 @@
     </div>
   </div>
 
-  <!-- Cards de resumo -->
   <div class="stats-grid" id="stats-grid">
     <div class="stat-card"><div class="stat-label">Total de Demandas</div><div class="stat-value azul" id="st-total">—</div></div>
     <div class="stat-card"><div class="stat-label">Homologadas</div><div class="stat-value dourado" id="st-homologadas">—</div></div>
@@ -51,13 +47,11 @@
     <div class="stat-card"><div class="stat-label">Valor Total (R$)</div><div class="stat-value azul" id="st-valor" style="font-size:18px">—</div></div>
   </div>
 
-  <!-- Progresso por status -->
   <div class="card">
     <div class="card-title">Demandas por status</div>
     <div id="status-bars"></div>
   </div>
 
-  <!-- Lista recente -->
   <div class="card">
     <div class="card-title">Últimas demandas</div>
     <div id="lista-recente"><div class="loading-overlay"><span class="spinner"></span> Carregando…</div></div>
@@ -78,7 +72,6 @@
   const anoAtual = new Date().getFullYear();
   const selExercicio = document.getElementById('sel-exercicio');
 
-  // Popular seletor de exercícios
   for (let a = anoAtual; a >= anoAtual - 4; a--) {
     const opt = document.createElement('option');
     opt.value = a; opt.textContent = a;
@@ -90,79 +83,86 @@
 
   async function carregarDados() {
     const exercicio = parseInt(selExercicio.value);
+    const escopo = perfil.papel === 'administrador'
+      ? 'Global'
+      : (perfil.campus ? perfil.campus.nome : '—');
     document.getElementById('subtitulo').textContent =
-      'Exercício ' + exercicio + ' — ' + (perfil.campus ? perfil.campus.nome : 'Global');
+      'Exercício ' + exercicio + ' — ' + escopo;
 
     try {
       let demandas;
-      if (perfil.papel === 'chefe_secao') {
+      if (perfil.papel === 'administrador') {
+        demandas = await listarTodasDemandas(exercicio);
+      } else if (perfil.papel === 'chefe_secao') {
         demandas = await listarDemandasDaUnidade(perfil.unidade_id, exercicio);
       } else {
         demandas = await listarDemandasDoCampus(perfil.campus_id, exercicio);
       }
 
-      // Estatísticas
-      const total = demandas.length;
-      const homologadas = demandas.filter(d => d.status === 'homologada').length;
-      const submetidas  = demandas.filter(d => d.status === 'submetida').length;
-      const valorTotal  = demandas.reduce((s, d) => s + Number(d.valor_estimado || 0), 0);
+      const total       = demandas.length;
+      const homologadas = demandas.filter(function (d) { return d.status === 'homologada'; }).length;
+      const submetidas  = demandas.filter(function (d) { return d.status === 'submetida'; }).length;
+      const valorTotal  = demandas.reduce(function (s, d) { return s + Number(d.valor_estimado || 0); }, 0);
 
-      document.getElementById('st-total').textContent = total;
+      document.getElementById('st-total').textContent      = total;
       document.getElementById('st-homologadas').textContent = homologadas;
-      document.getElementById('st-submetidas').textContent = submetidas;
-      document.getElementById('st-valor').textContent = formatMoeda(valorTotal);
+      document.getElementById('st-submetidas').textContent  = submetidas;
+      document.getElementById('st-valor').textContent       = formatMoeda(valorTotal);
 
-      // Barras de status
-      const statusCount = {};
       const STATUS_ORDER = ['rascunho','submetida','de_acordo','reprovada','priorizada','homologada'];
-      STATUS_ORDER.forEach(s => { statusCount[s] = 0; });
-      demandas.forEach(d => { statusCount[d.status] = (statusCount[d.status] || 0) + 1; });
+      const statusCount = {};
+      STATUS_ORDER.forEach(function (s) { statusCount[s] = 0; });
+      demandas.forEach(function (d) { statusCount[d.status] = (statusCount[d.status] || 0) + 1; });
 
       const barsEl = document.getElementById('status-bars');
       if (total === 0) {
         barsEl.innerHTML = '<div class="empty-state"><p>Nenhuma demanda registrada para este exercício.</p></div>';
       } else {
-        barsEl.innerHTML = STATUS_ORDER.map(s => {
+        barsEl.innerHTML = STATUS_ORDER.map(function (s) {
           const cnt = statusCount[s] || 0;
           const pct = total > 0 ? Math.round(cnt / total * 100) : 0;
-          return `<div style="margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
-              <span>${statusBadge(s)}</span>
-              <span style="color:var(--cinza-medio)">${cnt} demanda${cnt !== 1 ? 's' : ''} (${pct}%)</span>
-            </div>
-            <div class="orcamento-bar"><div class="orcamento-bar-fill" style="width:${pct}%"></div></div>
-          </div>`;
+          return '<div style="margin-bottom:10px">' +
+            '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">' +
+              '<span>' + statusBadge(s) + '</span>' +
+              '<span style="color:var(--cinza-medio)">' + cnt + ' demanda' + (cnt !== 1 ? 's' : '') + ' (' + pct + '%)</span>' +
+            '</div>' +
+            '<div class="orcamento-bar"><div class="orcamento-bar-fill" style="width:' + pct + '%"></div></div>' +
+          '</div>';
         }).join('');
       }
 
-      // Lista recente (últimas 10)
-      const recentes = [...demandas].sort((a,b) => new Date(b.criado_em) - new Date(a.criado_em)).slice(0, 10);
+      const recentes = demandas.slice().sort(function (a, b) {
+        return new Date(b.criado_em) - new Date(a.criado_em);
+      }).slice(0, 10);
+
       const listaEl = document.getElementById('lista-recente');
       if (recentes.length === 0) {
-        listaEl.innerHTML = `<div class="empty-state">
-          <div class="empty-icon">📋</div>
-          <h3>Nenhuma demanda ainda</h3>
-          <p>As demandas registradas aparecerão aqui.</p>
-          ${perfil.papel === 'chefe_secao' ? '<a href="demandas.html" class="btn btn-primary btn-sm">Criar primeira demanda →</a>' : ''}
-        </div>`;
+        listaEl.innerHTML = '<div class="empty-state">' +
+          '<div class="empty-icon">📋</div>' +
+          '<h3>Nenhuma demanda ainda</h3>' +
+          '<p>As demandas registradas aparecerão aqui.</p>' +
+          (perfil.papel === 'chefe_secao' ? '<a href="demandas.html" class="btn btn-primary btn-sm">Criar primeira demanda →</a>' : '') +
+        '</div>';
       } else {
-        listaEl.innerHTML = `<div class="table-wrap"><table>
-          <thead><tr>
-            <th>Objeto</th><th>Unidade</th><th>Status</th><th class="col-num">Valor (R$)</th><th>Data</th>
-          </tr></thead>
-          <tbody>
-            ${recentes.map(d => `<tr>
-              <td><a href="demandas.html?id=${d.id}">${d.descricao_objeto.substring(0,60)}${d.descricao_objeto.length>60?'…':''}</a></td>
-              <td>${d.unidade ? d.unidade.sigla : '—'}</td>
-              <td>${statusBadge(d.status)}</td>
-              <td class="col-num">${formatMoeda(d.valor_estimado)}</td>
-              <td>${formatData(d.criado_em)}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table></div>`;
+        const linhas = recentes.map(function (d) {
+          const unidade = d.unidade ? d.unidade.sigla : (d.campus ? d.campus.sigla : '—');
+          return '<tr>' +
+            '<td><a href="demandas.html">' + d.descricao_objeto.substring(0, 60) + (d.descricao_objeto.length > 60 ? '…' : '') + '</a></td>' +
+            '<td>' + unidade + '</td>' +
+            '<td>' + statusBadge(d.status) + '</td>' +
+            '<td class="col-num">' + formatMoeda(d.valor_estimado) + '</td>' +
+            '<td>' + formatData(d.criado_em) + '</td>' +
+          '</tr>';
+        }).join('');
+        listaEl.innerHTML = '<div class="table-wrap"><table>' +
+          '<thead><tr><th>Objeto</th><th>Unidade</th><th>Status</th><th class="col-num">Valor (R$)</th><th>Data</th></tr></thead>' +
+          '<tbody>' + linhas + '</tbody>' +
+          '</table></div>';
       }
     } catch (err) {
       showToast('Erro ao carregar dados: ' + err.message, 'error');
+      document.getElementById('lista-recente').innerHTML =
+        '<div class="alert alert-danger">Erro ao carregar demandas: ' + err.message + '</div>';
     }
   }
 
