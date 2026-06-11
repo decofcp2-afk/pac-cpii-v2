@@ -6,7 +6,7 @@
 // ⚠️ SUBSTITUA A ANON KEY ABAIXO
 // Settings → API → Project API Keys → anon / public
 const SUPABASE_URL  = 'https://fhgqixzufmgebwfffdai.supabase.co';
-const SUPABASE_ANON = 'SUPABASE_ANON_KEY_AQUI';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZoZ3FpeHp1Zm1nZWJ3ZmZmZGFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExOTIzMzIsImV4cCI6MjA5Njc2ODMzMn0.upWS-V_1bCvk7jEJgAdJxFQKQHp5D9g6QFbR8xCX8pQ';
 
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON);
