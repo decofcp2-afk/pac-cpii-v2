@@ -119,12 +119,6 @@
             <input type="number" id="f-valor" min="0" step="0.01" placeholder="0,00">
             <span class="field-error" id="f-valor-err" style="display:none"></span>
           </div>
-          <div class="form-group" style="justify-content:center;padding-top:20px">
-            <div class="form-check">
-              <input type="checkbox" id="f-exclusiva">
-              <label for="f-exclusiva">Demanda exclusiva para ME/EPP (art. 8.3.2.7)</label>
-            </div>
-          </div>
         </div>
 
         <div class="form-section-title">Contrato existente (art. 8.3.2.6)</div>
@@ -352,8 +346,7 @@
     // Verificar se há dotação para o exercício (RN01)
     try {
       const dots = await listarDotacoes(perfil.campus_id, exercicioAtual);
-      const dotUn = dots.filter(d => d.unidade_id === perfil.unidade_id);
-      document.getElementById('alerta-orcamento').style.display = dotUn.length === 0 ? '' : 'none';
+      document.getElementById('alerta-orcamento').style.display = dots.length === 0 ? '' : 'none';
     } catch {}
 
     if (id) {
@@ -425,10 +418,9 @@
     document.getElementById('f-quantidade').value  = d.quantidade || '';
     document.getElementById('f-medida').value      = d.unidade_medida || '';
     document.getElementById('f-valor').value       = d.valor_estimado || '';
-    document.getElementById('f-exclusiva').checked = d.exclusiva || false;
     document.getElementById('f-possui-contrato').checked = d.possui_contrato || false;
     if (d.possui_contrato) document.getElementById('grupo-risco').style.display = '';
-    document.getElementById('f-risco').checked     = d.risco_nao_prorrogacao || false;
+    document.getElementById('f-risco').checked     = d.risco_nao_prorrogacao === 'sim';
     document.getElementById('f-gt-nome').value     = d.gestor_titular_nome || '';
     document.getElementById('f-gt-siape').value    = d.gestor_titular_siape || '';
     document.getElementById('f-gt-email').value    = d.gestor_titular_email || '';
@@ -454,9 +446,8 @@
       quantidade:              parseFloat(document.getElementById('f-quantidade').value),
       unidade_medida:          document.getElementById('f-medida').value,
       valor_estimado:          parseFloat(document.getElementById('f-valor').value),
-      exclusiva:               document.getElementById('f-exclusiva').checked,
       possui_contrato:         document.getElementById('f-possui-contrato').checked,
-      risco_nao_prorrogacao:   document.getElementById('f-risco').checked,
+      risco_nao_prorrogacao:   document.getElementById('f-risco').checked ? 'sim' : null,
       gestor_titular_nome:     document.getElementById('f-gt-nome').value.trim(),
       gestor_titular_siape:    document.getElementById('f-gt-siape').value.trim(),
       gestor_titular_email:    document.getElementById('f-gt-email').value.trim(),
