@@ -60,7 +60,7 @@
         </div>
         <div class="form-group">
           <label>E-mail <span style="color:#EF4444">*</span></label>
-          <input type="email" id="u-email" id="u-email">
+          <input type="email" id="u-email">
           <span class="field-error" id="u-email-err" style="display:none"></span>
         </div>
         <div class="form-group">
@@ -260,4 +260,22 @@ const PAPEL_LABELS = {
         // Criar perfil na tabela usuarios
         await criarUsuarioNoBanco({
           id: novoId, campus_id: perfil.campus_id,
-          unidade_id: unidade, nome, papel, ativo: t
+          unidade_id: unidade, nome, papel, ativo: true, primeiro_acesso: true
+        });
+        showToast('Usuário criado. Ele poderá fazer login com a senha definida.', 'success');
+      }
+      document.getElementById('view-lista').style.display = '';
+      document.getElementById('view-form').style.display = 'none';
+      carregarUsuarios();
+    } catch (err) {
+      showToast('Erro ao salvar: ' + err.message, 'error');
+    } finally {
+      setLoading(this, false);
+    }
+  });
+
+  carregarUsuarios();
+})();
+</script>
+</body>
+</html>
