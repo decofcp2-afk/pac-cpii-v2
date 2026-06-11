@@ -238,30 +238,26 @@ const PAPEL_LABELS = {
         await atualizarUsuario(_editandoId, { nome, unidade_id: unidade, papel, ativo });
         showToast('Usuário atualizado.', 'success');
       } else {
-        // Criar usuário no Supabase Auth
-        const { data, error } = await db.auth.admin.createUser({
-          email, password: senha, email_confirm: true
+        // Salvar sessão atual antes de criar novo usuário
+        // (signUp substitui a sessão no browser — restauramos depois)
+        const { data: { session: sessaoAtual } } = await db.auth.getSession();
+
+        const { data: signUpData, error: signUpError } = await db.auth.signUp({
+          email, password: senha
         });
-        if (error) throw error;
+        if (signUpError) throw signUpError;
+
+        const novoId = signUpData.user.id;
+
+        // Restaurar sessão do usuário logado (licitações/admin)
+        if (sessaoAtual) {
+          await db.auth.setSession({
+            access_token:  sessaoAtual.access_token,
+            refresh_token: sessaoAtual.refresh_token
+          });
+        }
+
         // Criar perfil na tabela usuarios
         await criarUsuarioNoBanco({
-          id: data.user.id, campus_id: perfil.campus_id,
-          unidade_id: unidade, nome, papel, ativo: true, primeiro_acesso: true
-        });
-        showToast('Usuário criado. Senha inicial definida.', 'success');
-      }
-      document.getElementById('view-lista').style.display = '';
-      document.getElementById('view-form').style.display = 'none';
-      carregarUsuarios();
-    } catch (err) {
-      showToast('Erro ao salvar: ' + (err.message || err), 'error');
-    } finally {
-      setLoading(this, false);
-    }
-  });
-
-  carregarUsuarios();
-})();
-</script>
-</body>
-</html>
+          id: novoId, campus_id: perfil.campus_id,
+          unidade_id: unidade, nome, papel, ativo: t
