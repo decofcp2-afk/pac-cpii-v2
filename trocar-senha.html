@@ -3,101 +3,95 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Criar Senha — PAC CPII</title>
+  <title>Trocar Senha — PAC CPII</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body class="login-page">
+<body>
 
-<div class="login-box">
-  <div class="login-logo">
-    <div style="width:64px;height:64px;background:var(--azul);border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;font-weight:700">CP</div>
-  </div>
-  <h1>Criar senha</h1>
-  <p class="subtitle" id="msg-boas-vindas">Bem-vindo(a) ao PAC CPII. Crie uma senha para continuar.</p>
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--azul-escuro)">
+  <div class="card" style="width:100%;max-width:420px;padding:40px">
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="width:56px;height:56px;background:var(--azul-primario);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-weight:700;font-size:22px;color:#fff">CP</div>
+      <h1 style="font-size:22px;margin-bottom:4px">Defina sua nova senha</h1>
+      <p style="color:var(--cinza-medio)">Este é seu primeiro acesso. Crie uma senha segura para continuar.</p>
+    </div>
 
-  <div id="alerta-erro" class="alert alert-danger" style="display:none"></div>
-
-  <form id="form-senha" novalidate style="margin-top:8px">
-    <div class="form-group" style="margin-bottom:14px">
-      <label for="nova-senha">Nova senha</label>
-      <input type="password" id="nova-senha" placeholder="Mínimo 8 caracteres, 1 maiúscula, 1 número" required>
+    <div class="form-group" style="margin-bottom:16px">
+      <label>Nova senha <span style="color:#EF4444">*</span></label>
+      <input type="password" id="nova-senha" placeholder="Mín. 8 chars, 1 maiúscula, 1 número"
+        style="width:100%;padding:10px 12px;border:1px solid var(--borda);border-radius:6px">
       <span class="field-error" id="nova-senha-err" style="display:none"></span>
     </div>
 
-    <div class="form-group" style="margin-bottom:20px">
-      <label for="conf-senha">Confirme a nova senha</label>
-      <input type="password" id="conf-senha" placeholder="Repita a senha" required>
+    <div class="form-group" style="margin-bottom:24px">
+      <label>Confirmar senha <span style="color:#EF4444">*</span></label>
+      <input type="password" id="conf-senha" placeholder="Repita a nova senha"
+        style="width:100%;padding:10px 12px;border:1px solid var(--borda);border-radius:6px">
       <span class="field-error" id="conf-senha-err" style="display:none"></span>
     </div>
 
-    <button type="submit" class="btn btn-primary" id="btn-salvar">Salvar senha e entrar</button>
-  </form>
+    <button class="btn btn-primary" id="btn-salvar" style="width:100%">Salvar nova senha</button>
+    <div id="msg-ok" class="alert alert-success" style="display:none;margin-top:16px">
+      Senha alterada! Redirecionando…
+    </div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="supabase.js"></script>
 <script src="ui.js"></script>
+<script src="auth.js"></script>
 <script>
 (async function () {
-  const session = await getSession();
-  if (!session) { location.href = 'login.html'; return; }
-
-  let perfil;
-  try { perfil = await getMeuPerfil(); } catch { location.href = 'login.html'; return; }
-
-  // Se não é primeiro acesso, redirecionar para home
-  if (!perfil.primeiro_acesso) {
-    location.href = HOME_POR_PAPEL[perfil.papel] || 'dashboard.html';
+  // Verifica se há sessão ativa
+  const user = await getUser();
+  if (!user) {
+    window.location.href = 'index.html';
     return;
   }
 
-  document.getElementById('msg-boas-vindas').textContent =
-    'Bem-vindo(a), ' + perfil.nome + '. Por segurança, crie uma senha pessoal para continuar.';
-
-  function validarSenha(s) {
-    if (s.length < 8) return 'Mínimo de 8 caracteres.';
-    if (!/[A-Z]/.test(s)) return 'Deve conter ao menos 1 letra maiúscula.';
-    if (!/[0-9]/.test(s)) return 'Deve conter ao menos 1 número.';
-    return '';
-  }
-
-  document.getElementById('form-senha').addEventListener('submit', async function (e) {
-    e.preventDefault();
+  document.getElementById('btn-salvar').addEventListener('click', async function () {
     const nova = document.getElementById('nova-senha').value;
     const conf = document.getElementById('conf-senha').value;
-    const btn  = document.getElementById('btn-salvar');
-    const erro = document.getElementById('alerta-erro');
     let ok = true;
 
-    const errNova = validarSenha(nova);
-    document.getElementById('nova-senha-err').textContent = errNova;
-    document.getElementById('nova-senha-err').style.display = errNova ? '' : 'none';
-    document.getElementById('nova-senha').classList.toggle('error', !!errNova);
-    if (errNova) ok = false;
+    function err(id, msg) {
+      const el = document.getElementById(id);
+      if (el) { el.textContent = msg; el.style.display = msg ? '' : 'none'; }
+      if (msg) ok = false;
+    }
+
+    if (!nova || nova.length < 8 || !/[A-Z]/.test(nova) || !/[0-9]/.test(nova)) {
+      err('nova-senha-err', 'Mín. 8 chars, 1 maiúscula, 1 número.');
+    } else {
+      err('nova-senha-err', '');
+    }
 
     if (nova !== conf) {
-      document.getElementById('conf-senha-err').textContent = 'As senhas não coincidem.';
-      document.getElementById('conf-senha-err').style.display = '';
-      document.getElementById('conf-senha').classList.add('error');
-      ok = false;
+      err('conf-senha-err', 'As senhas não conferem.');
     } else {
-      document.getElementById('conf-senha-err').style.display = 'none';
-      document.getElementById('conf-senha').classList.remove('error');
+      err('conf-senha-err', '');
     }
 
     if (!ok) return;
 
-    setLoading(btn, true);
-    erro.style.display = 'none';
-
+    setLoading(this, true);
     try {
       await updatePassword(nova);
-      await marcarPrimeiroAcessoConcluido(perfil.id);
-      location.href = HOME_POR_PAPEL[perfil.papel] || 'dashboard.html';
-    } catch (err) {
-      setLoading(btn, false);
-      erro.textContent = 'Erro ao salvar senha: ' + (err.message || 'tente novamente.');
-      erro.style.display = '';
+      // Marcar primeiro acesso como concluído
+      const perfil = await getMeuPerfil();
+      if (perfil && perfil.primeiro_acesso) {
+        await marcarPrimeiroAcessoConcluido(user.id);
+      }
+      document.getElementById('msg-ok').style.display = '';
+      setTimeout(function () {
+        const papel = perfil ? perfil.papel : null;
+        window.location.href = HOME_POR_PAPEL[papel] || 'dashboard.html';
+      }, 1500);
+    } catch (err2) {
+      showToast('Erro ao alterar senha: ' + err2.message, 'error');
+    } finally {
+      setLoading(this, false);
     }
   });
 })();
