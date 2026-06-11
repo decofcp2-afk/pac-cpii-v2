@@ -146,13 +146,13 @@ const TIPO_LABELS = { campus:'Campus', pro_reitoria:'Pró-Reitoria', diretoria:'
     const tbody = document.getElementById('tbody-campi');
     tbody.innerHTML = '<tr><td colspan="4"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>';
     try {
-      const campi = await listarCampi();
+      const [campi, unidadeCounts] = await Promise.all([listarCampi(), contarUnidadesPorCampus()]);
       if (campi.length === 0) {
         tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><h3>Nenhum campus cadastrado</h3></div></td></tr>';
         return;
       }
       tbody.innerHTML = campi.map(c => `<tr>
-        <td>${c.nome}</td><td>${c.sigla}</td><td>—</td>
+        <td>${c.nome}</td><td>${c.sigla}</td><td>${unidadeCounts[c.id] || 0}</td>
         <td class="col-actions">
           <button class="btn btn-sm btn-secondary" onclick="selecionarCampus('${c.id}','${c.nome}')">Gerenciar</button>
         </td>
