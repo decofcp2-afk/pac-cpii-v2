@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Usuários — PAC CPII</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header id="app-header">
+  <div class="header-left">
+    <button id="btn-menu-mobile">☰</button>
+    <div style="width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">CP</div>
+    <div class="header-title">PAC — Colégio Pedro II<small>Plano Anual de Contratações</small></div>
+  </div>
+  <div class="header-right">
+    <span class="campus-label" id="header-campus"></span>
+    <span id="header-nome"></span>
+    <button id="btn-logout">Sair</button>
+  </div>
+</header>
+<aside id="app-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+<main id="app-main">
+  <!-- Lista -->
+  <div id="view-lista">
+    <div class="page-header">
+      <div><h1>Usuários</h1><p id="subtitulo">Usuários do campus</p></div>
+      <button class="btn btn-primary" id="btn-novo-usuario">+ Novo usuário</button>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Nome</th><th>Unidade</th><th>Papel</th><th>Status</th>
+            <th>Primeiro acesso</th><th class="col-actions">Ações</th>
+          </tr></thead>
+          <tbody id="tbody-usuarios">
+            <tr><td colspan="6"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Formulário -->
+  <div id="view-form" style="display:none">
+    <div class="page-header">
+      <div><h1 id="titulo-form">Novo usuário</h1></div>
+      <button class="btn btn-secondary" id="btn-voltar">← Voltar</button>
+    </div>
+    <div class="card">
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label>Nome completo <span style="color:#EF4444">*</span></label>
+          <input type="text" id="u-nome">
+          <span class="field-error" id="u-nome-err" style="display:none"></span>
+        </div>
+        <div class="form-group">
+          <label>E-mail <span style="color:#EF4444">*</span></label>
+          <input type="email" id="u-email" id="u-email">
+          <span class="field-error" id="u-email-err" style="display:none"></span>
+        </div>
+        <div class="form-group">
+          <label>Unidade <span style="color:#EF4444">*</span></label>
+          <select id="u-unidade">
+            <option value="">Selecione…</option>
+          </select>
+          <span class="field-error" id="u-unidade-err" style="display:none"></span>
+        </div>
+        <div class="form-group">
+          <label>Papel <span style="color:#EF4444">*</span></label>
+          <select id="u-papel">
+            <option value="">Selecione…</option>
+            <option value="ord_despesas">Ordenador de Despesas</option>
+            <option value="chefia">Chefia</option>
+            <option value="chefe_secao">Chefe de Seção</option>
+            <option value="licitacoes">Licitações</option>
+          </select>
+          <span class="field-error" id="u-papel-err" style="display:none"></span>
+        </div>
+        <div class="form-group" id="grupo-senha" style="display:none">
+          <label>Senha inicial <span style="color:#EF4444">*</span></label>
+          <input type="password" id="u-senha" placeholder="Mín. 8 chars, 1 maiúscula, 1 número">
+          <span class="hint">O usuário será obrigado a trocar no primeiro acesso.</span>
+          <span class="field-error" id="u-senha-err" style="display:none"></span>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="u-ativo">
+            <option value="true">Ativo</option>
+            <option value="false">Inativo</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-primary" id="btn-salvar-usuario">Salvar usuário</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase.js"></script>
+<script src="ui.js"></script>
+<script src="auth.js"></script>
+<script>
+const PAPEL_LABELS = {
+  administrador: 'Administrador', ord_despesas: 'Ordenador',
+  chefia: 'Chefia', chefe_secao: 'Chefe de Seção', licitacoes: 'Licitações'
+};
+
+(async function () {
+  const perfil = await initAuth(['ord_despesas','licitacoes']);
+  if (!perfil) return;
+  buildSidebar(perfil);
+  initUI();
+  document.getElementById('subtitulo').textContent = perfil.campus ? perfil.campus.nome : '';
+
+  let _editandoId = null;
+  let _unidades = [];
+
+  // Carregar unidades do campus para o select
+  try {
+    _unidades = await listarUnidadesDoCampus(perfil.campus_id);
+    const sel = document.getElementById('u-unidade');
+    _unidades.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.id; opt.textContent = u.nome + ' (' + u.sigla + ')';
+      sel.appendChild(opt);
+    });
+  } catch {}
+
+  document.getElementById('btn-novo-usuario').addEventListener('click', function () {
+    _editandoId = null;
+    document.getElementById('titulo-form').textContent = 'Novo usuário';
+    document.getElementById('u-nome').value = '';
+    document.getElementById('u-email').value = '';
+    document.getElementById('u-email').disabled = false;
+    document.getElementById('u-unidade').value = '';
+    document.getElementById('u-papel').value = '';
+    document.getElementById('u-ativo').value = 'true';
+    document.getElementById('u-senha').value = '';
+    document.getElementById('grupo-senha').style.display = '';
+    document.querySelectorAll('.field-error').forEach(el => el.style.display='none');
+    document.getElementById('view-lista').style.display = 'none';
+    document.getElementById('view-form').style.display = '';
+  });
+
+  document.getElementById('btn-voltar').addEventListener('click', function () {
+    document.getElementById('view-lista').style.display = '';
+    document.getElementById('view-form').style.display = 'none';
+    carregarUsuarios();
+  });
+
+  async function carregarUsuarios() {
+    const tbody = document.getElementById('tbody-usuarios');
+    tbody.innerHTML = '<tr><td colspan="6"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>';
+    try {
+      const usuarios = await listarUsuariosDoCampus(perfil.campus_id);
+      if (usuarios.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+          <h3>Nenhum usuário cadastrado</h3></div></td></tr>`;
+        return;
+      }
+      tbody.innerHTML = usuarios.map(u => `<tr>
+        <td><strong>${u.nome}</strong><br><span style="font-size:12px;color:var(--cinza-medio)">${u.id}</span></td>
+        <td>${u.unidade ? u.unidade.sigla : '—'}</td>
+        <td>${PAPEL_LABELS[u.papel] || u.papel}</td>
+        <td><span class="badge ${u.ativo?'badge-de_acordo':'badge-reprovada'}">${u.ativo?'Ativo':'Inativo'}</span></td>
+        <td>${u.primeiro_acesso ? '<span class="badge badge-submetida">Pendente</span>' : '—'}</td>
+        <td class="col-actions">
+          <button class="btn btn-sm btn-secondary" onclick="editarUsuario('${u.id}')">Editar</button>
+          <button class="btn btn-sm btn-danger" onclick="resetarSenha('${u.id}')">Reset senha</button>
+        </td>
+      </tr>`).join('');
+      window._usuarios = usuarios;
+    } catch (err) { showToast('Erro: '+err.message,'error'); }
+  }
+
+  window.editarUsuario = function (id) {
+    const u = (window._usuarios||[]).find(x => x.id === id);
+    if (!u) return;
+    _editandoId = id;
+    document.getElementById('titulo-form').textContent = 'Editar usuário';
+    document.getElementById('u-nome').value = u.nome;
+    document.getElementById('u-email').value = u.id; // mostra id como ref
+    document.getElementById('u-email').disabled = true;
+    document.getElementById('u-unidade').value = u.unidade_id || '';
+    document.getElementById('u-papel').value = u.papel || '';
+    document.getElementById('u-ativo').value = String(u.ativo);
+    document.getElementById('grupo-senha').style.display = 'none';
+    document.querySelectorAll('.field-error').forEach(el => el.style.display='none');
+    document.getElementById('view-lista').style.display = 'none';
+    document.getElementById('view-form').style.display = '';
+  };
+
+  window.resetarSenha = function (id) {
+    showModal({
+      titulo: 'Resetar senha',
+      mensagem: 'O usuário será obrigado a criar uma nova senha no próximo acesso. Confirme.',
+      confirmLabel: 'Resetar', confirmClass: 'btn-warning',
+      onConfirm: async function () {
+        try {
+          await atualizarUsuario(id, { primeiro_acesso: true });
+          showToast('Senha resetada. Usuário deverá criar nova senha ao entrar.', 'success');
+        } catch (err) { showToast('Erro: '+err.message,'error'); }
+      }
+    });
+  };
+
+  document.getElementById('btn-salvar-usuario').addEventListener('click', async function () {
+    const nome    = document.getElementById('u-nome').value.trim();
+    const email   = _editandoId ? null : document.getElementById('u-email').value.trim();
+    const unidade = document.getElementById('u-unidade').value;
+    const papel   = document.getElementById('u-papel').value;
+    const ativo   = document.getElementById('u-ativo').value === 'true';
+    const senha   = !_editandoId ? document.getElementById('u-senha').value : null;
+
+    let ok = true;
+    function err(id, msg) { const el=document.getElementById(id+'-err'); if(el){el.textContent=msg;el.style.display=msg?'':'none';} if(msg) ok=false; }
+
+    if (!nome) err('u-nome','Campo obrigatório.'); else err('u-nome','');
+    if (!_editandoId && !email) err('u-email','Campo obrigatório.'); else err('u-email','');
+    if (!unidade) err('u-unidade','Selecione a unidade.'); else err('u-unidade','');
+    if (!papel)   err('u-papel','Selecione o papel.'); else err('u-papel','');
+    if (!_editandoId) {
+      if (!senha || senha.length < 8 || !/[A-Z]/.test(senha) || !/[0-9]/.test(senha))
+        err('u-senha','Mín. 8 chars, 1 maiúscula, 1 número.'); else err('u-senha','');
+    }
+    if (!ok) return;
+
+    setLoading(this, true);
+    try {
+      if (_editandoId) {
+        await atualizarUsuario(_editandoId, { nome, unidade_id: unidade, papel, ativo });
+        showToast('Usuário atualizado.', 'success');
+      } else {
+        // Criar usuário no Supabase Auth
+        const { data, error } = await db.auth.admin.createUser({
+          email, password: senha, email_confirm: true
+        });
+        if (error) throw error;
+        // Criar perfil na tabela usuarios
+        await criarUsuarioNoBanco({
+          id: data.user.id, campus_id: perfil.campus_id,
+          unidade_id: unidade, nome, papel, ativo: true, primeiro_acesso: true
+        });
+        showToast('Usuário criado. Senha inicial definida.', 'success');
+      }
+      document.getElementById('view-lista').style.display = '';
+      document.getElementById('view-form').style.display = 'none';
+      carregarUsuarios();
+    } catch (err) {
+      showToast('Erro ao salvar: ' + (err.message || err), 'error');
+    } finally {
+      setLoading(this, false);
+    }
+  });
+
+  carregarUsuarios();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PAC — Colégio Pedro II</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="publico-page">
+
+<!-- Cabeçalho público -->
+<header class="publico-header">
+  <div style="width:48px;height:48px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px">CP</div>
+  <div>
+    <h1>Plano Anual de Contratações</h1>
+    <p>Colégio Pedro II — Consulta Pública</p>
+  </div>
+  <div style="margin-left:auto">
+    <a href="login.html" class="btn btn-secondary btn-sm" style="color:#fff;border-color:rgba(255,255,255,.4);background:rgba(255,255,255,.1)">Entrar no sistema</a>
+  </div>
+</header>
+
+<div class="publico-main">
+  <!-- Filtros -->
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+      <div class="form-group" style="flex:1;min-width:200px">
+        <label>Campus</label>
+        <select id="sel-campus"><option value="">Selecione um campus…</option></select>
+      </div>
+      <div class="form-group" style="min-width:120px">
+        <label>Exercício</label>
+        <select id="sel-exercicio" disabled><option value="">—</option></select>
+      </div>
+      <button class="btn btn-primary" id="btn-pdf" style="display:none">⬇ Gerar PDF</button>
+    </div>
+  </div>
+
+  <!-- Resultados -->
+  <div id="resultado">
+    <div class="empty-state">
+      <div class="empty-icon">🔍</div>
+      <h3>Selecione um campus e exercício</h3>
+      <p>Escolha o campus e o ano acima para visualizar o plano de contratações homologado.</p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- jsPDF para geração de PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="supabase.js"></script>
+<script src="ui.js"></script>
+<script>
+(async function () {
+  const selCampus   = document.getElementById('sel-campus');
+  const selExercicio = document.getElementById('sel-exercicio');
+  const btnPdf      = document.getElementById('btn-pdf');
+  const resultado   = document.getElementById('resultado');
+
+  let _campusNome = '';
+  let _exercicio  = null;
+  let _demandas   = [];
+
+  // Carregar campi
+  try {
+    const campi = await listarCampiPublico();
+    campi.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id; opt.textContent = c.nome;
+      opt.dataset.nome = c.nome;
+      selCampus.appendChild(opt);
+    });
+  } catch (err) {
+    resultado.innerHTML = '<div class="alert alert-danger">Erro ao carregar campi.</div>';
+  }
+
+  selCampus.addEventListener('change', async function () {
+    const campusId = this.value;
+    _campusNome = this.options[this.selectedIndex]?.dataset?.nome || '';
+    selExercicio.innerHTML = '<option value="">Carregando…</option>';
+    selExercicio.disabled = true;
+    btnPdf.style.display = 'none';
+    resultado.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Carregando exercícios…</div>';
+
+    if (!campusId) {
+      selExercicio.innerHTML = '<option value="">—</option>';
+      resultado.innerHTML = '';
+      return;
+    }
+
+    try {
+      const anos = await listarExerciciosPublicos(campusId);
+      selExercicio.innerHTML = '<option value="">Selecione o exercício…</option>';
+      anos.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a; opt.textContent = a;
+        selExercicio.appendChild(opt);
+      });
+      selExercicio.disabled = false;
+
+      if (anos.length === 0) {
+        resultado.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><h3>Nenhum plano homologado</h3><p>Este campus ainda não possui planos homologados.</p></div>';
+      } else {
+        resultado.innerHTML = '<div class="empty-state"><p>Selecione o exercício para visualizar o plano.</p></div>';
+      }
+    } catch (err) {
+      resultado.innerHTML = '<div class="alert alert-danger">Erro ao carregar exercícios.</div>';
+    }
+  });
+
+  selExercicio.addEventListener('change', async function () {
+    _exercicio = this.value ? parseInt(this.value) : null;
+    btnPdf.style.display = 'none';
+    if (!selCampus.value || !_exercicio) return;
+
+    resultado.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Carregando plano…</div>';
+
+    try {
+      _demandas = await listarDemandasHomologadas(selCampus.value, _exercicio);
+      renderResultado();
+      if (_demandas.length > 0) btnPdf.style.display = '';
+    } catch (err) {
+      resultado.innerHTML = '<div class="alert alert-danger">Erro ao carregar dados.</div>';
+    }
+  });
+
+  function renderResultado() {
+    if (_demandas.length === 0) {
+      resultado.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><h3>Nenhuma demanda homologada</h3><p>Não há demandas homologadas para este campus e exercício.</p></div>';
+      return;
+    }
+
+    // Agrupar por unidade
+    const grupos = {};
+    _demandas.forEach(d => {
+      const key = d.unidade ? d.unidade.id : 'geral';
+      const nome = d.unidade ? d.unidade.nome : 'Sem unidade';
+      if (!grupos[key]) grupos[key] = { nome, demandas: [] };
+      grupos[key].demandas.push(d);
+    });
+
+    const totalGeral = _demandas.reduce((s,d) => s+Number(d.valor_estimado||0), 0);
+
+    let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="font-size:17px">${_campusNome} — Exercício ${_exercicio}</h2>
+      <span style="font-size:13px;color:var(--cinza-medio)">${_demandas.length} demanda(s) · Total: ${formatMoeda(totalGeral)}</span>
+    </div>`;
+
+    Object.values(grupos).forEach(g => {
+      const subtotal = g.demandas.reduce((s,d) => s+Number(d.valor_estimado||0), 0);
+      html += `<div class="card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:12px">
+          <strong>${g.nome}</strong>
+          <span style="font-size:13px;color:var(--cinza-medio)">${g.demandas.length} item(s) · ${formatMoeda(subtotal)}</span>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr>
+            <th>#</th><th>Objeto</th><th>Qtd</th><th>Un.</th>
+            <th class="col-num">Valor est.</th><th style="text-align:center">GUT</th>
+          </tr></thead>
+          <tbody>
+            ${g.demandas.map(d => `<tr>
+              <td style="color:var(--cinza-medio)">${d.gut_prioridade||'—'}</td>
+              <td title="${d.descricao_objeto}">${d.descricao_objeto.substring(0,70)}${d.descricao_objeto.length>70?'…':''}</td>
+              <td>${Number(d.quantidade).toLocaleString('pt-BR')}</td>
+              <td>${d.unidade_medida}</td>
+              <td class="col-num">${formatMoeda(d.valor_estimado)}</td>
+              <td style="text-align:center;font-weight:600;color:var(--dourado)">${d.gut_total||'—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>
+      </div>`;
+    });
+
+    resultado.innerHTML = html;
+  }
+
+  // ── Geração de PDF ─────────────────────────────────────────── //
+  btnPdf.addEventListener('click', function () {
+    if (_demandas.length === 0) return;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    const agora = new Date().toLocaleString('pt-BR');
+    const titulo = 'PAC — ' + _campusNome + ' — Exercício ' + _exercicio;
+
+    // Cabeçalho
+    doc.setFillColor(26, 58, 107);
+    doc.rect(0, 0, 297, 20, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.setFont('helvetica','bold');
+    doc.text('Colégio Pedro II — Plano Anual de Contratações', 14, 9);
+    doc.setFontSize(10);
+    doc.setFont('helvetica','normal');
+    doc.text(titulo, 14, 15);
+    doc.text('Gerado em: ' + agora, 297 - 14, 15, { align: 'right' });
+
+    // Agrupar por unidade
+    const grupos = {};
+    _demandas.forEach(d => {
+      const key = d.unidade ? d.unidade.id : 'geral';
+      const nome = d.unidade ? d.unidade.nome + ' (' + d.unidade.sigla + ')' : 'Sem unidade';
+      if (!grupos[key]) grupos[key] = { nome, demandas: [] };
+      grupos[key].demandas.push(d);
+    });
+
+    let startY = 26;
+
+    Object.values(grupos).forEach(g => {
+      doc.setTextColor(26, 58, 107);
+      doc.setFontSize(10);
+      doc.setFont('helvetica','bold');
+      doc.text(g.nome, 14, startY);
+      startY += 2;
+
+      doc.autoTable({
+        startY,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [26, 58, 107], textColor: 255, fontStyle: 'bold' },
+        columnStyles: {
+          0: { cellWidth: 8, halign: 'center' },
+          4: { halign: 'right' },
+          5: { cellWidth: 18, halign: 'center' },
+        },
+        head: [['#','Objeto','Qtd','Un.','Valor estimado','GUT','Gestor Titular','Fiscal Titular']],
+        body: g.demandas.map(d => [
+          d.gut_prioridade || '—',
+          d.descricao_objeto.substring(0, 80),
+          Number(d.quantidade).toLocaleString('pt-BR'),
+          d.unidade_medida,
+          formatMoeda(d.valor_estimado),
+          d.gut_total || '—',
+          (d.gestor_titular_nome||'—') + '\nSIAPE: '+(d.gestor_titular_siape||'—'),
+          (d.fiscal_titular_nome||'—') + '\nSIAPE: '+(d.fiscal_titular_siape||'—'),
+        ]),
+        margin: { left: 14, right: 14 },
+        didDrawPage: function (data) { startY = data.cursor.y + 6; }
+      });
+
+      startY = doc.lastAutoTable.finalY + 8;
+    });
+
+    // Rodapé com total
+    const total = _demandas.reduce((s,d) => s+Number(d.valor_estimado||0), 0);
+    doc.setTextColor(26, 58, 107);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(10);
+    doc.text('Total geral: ' + formatMoeda(total) + ' (' + _demandas.length + ' demanda(s))', 14, startY);
+
+    doc.save('PAC_' + _campusNome.replace(/\s+/g,'_') + '_' + _exercicio + '.pdf');
+  });
+})();
+</script>
+</body>
+</html>

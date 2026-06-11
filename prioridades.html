@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prioridades GUT — PAC CPII</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header id="app-header">
+  <div class="header-left">
+    <button id="btn-menu-mobile">☰</button>
+    <div style="width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">CP</div>
+    <div class="header-title">PAC — Colégio Pedro II<small>Plano Anual de Contratações</small></div>
+  </div>
+  <div class="header-right">
+    <span class="campus-label" id="header-campus"></span>
+    <span id="header-nome"></span>
+    <button id="btn-logout">Sair</button>
+  </div>
+</header>
+<aside id="app-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+<main id="app-main">
+  <div class="page-header">
+    <div>
+      <h1>Priorização GUT</h1>
+      <p>Atribua G × U × T a cada demanda aprovada e salve a priorização.</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="sel-exercicio"></select>
+      <button class="btn btn-primary" id="btn-salvar-gut">Salvar priorização</button>
+    </div>
+  </div>
+
+  <div class="alert alert-info">
+    <strong>Matriz GUT:</strong> G = Gravidade | U = Urgência | T = Tendência. Escala de 1 a 5.
+    Total = G × U × T (máx. 125). A tabela é reordenada automaticamente ao salvar.
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table id="tabela-gut">
+        <thead><tr>
+          <th>#</th><th>Objeto</th><th>Unidade</th>
+          <th style="text-align:center">G</th>
+          <th style="text-align:center">U</th>
+          <th style="text-align:center">T</th>
+          <th style="text-align:center">GUT</th>
+          <th class="col-num">Valor est.</th>
+        </tr></thead>
+        <tbody id="tbody-gut">
+          <tr><td colspan="8"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase.js"></script>
+<script src="ui.js"></script>
+<script src="auth.js"></script>
+<script>
+(async function () {
+  const perfil = await initAuth(['ord_despesas','licitacoes']);
+  if (!perfil) return;
+  buildSidebar(perfil);
+  initUI();
+
+  const selEx = document.getElementById('sel-exercicio');
+  const anoAtual = new Date().getFullYear();
+  for (let a = anoAtual; a >= anoAtual-4; a--) {
+    const opt = document.createElement('option');
+    opt.value = a; opt.textContent = a;
+    if (a === anoAtual) opt.selected = true;
+    selEx.appendChild(opt);
+  }
+  selEx.addEventListener('change', carregarGUT);
+
+  let _demandas = [];
+
+  function optGUT(val) {
+    return [1,2,3,4,5].map(n => `<option value="${n}" ${n==val?'selected':''}>${n}</option>`).join('');
+  }
+
+  async function carregarGUT() {
+    const exercicio = parseInt(selEx.value);
+    const tbody = document.getElementById('tbody-gut');
+    tbody.innerHTML = '<tr><td colspan="8"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>';
+
+    try {
+      // Demandas de_acordo + já priorizadas (para edição)
+      const [deAcordo, priorizadas] = await Promise.all([
+        listarDemandasDoCampus(perfil.campus_id, exercicio, 'de_acordo'),
+        listarDemandasDoCampus(perfil.campus_id, exercicio, 'priorizada')
+      ]);
+      _demandas = [...deAcordo, ...priorizadas];
+
+      if (_demandas.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">
+          <div class="empty-icon">🎯</div>
+          <h3>Nenhuma demanda para priorizar</h3>
+          <p>Quando demandas receberem "De acordo" da chefia, aparecerão aqui.</p>
+        </div></td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = _demandas.map((d, i) => `
+        <tr data-id="${d.id}">
+          <td style="color:var(--cinza-medio);font-size:12px">${i+1}</td>
+          <td><span title="${d.descricao_objeto}">${d.descricao_objeto.substring(0,50)}${d.descricao_objeto.length>50?'…':''}</span>
+            ${d.status==='priorizada'?statusBadge('priorizada'):''}
+          </td>
+          <td>${d.unidade?d.unidade.sigla:'—'}</td>
+          <td style="text-align:center">
+            <select data-gut="g" style="width:56px;padding:4px;font-size:13px">${optGUT(d.gut_g||3)}</select>
+          </td>
+          <td style="text-align:center">
+            <select data-gut="u" style="width:56px;padding:4px;font-size:13px">${optGUT(d.gut_u||3)}</select>
+          </td>
+          <td style="text-align:center">
+            <select data-gut="t" style="width:56px;padding:4px;font-size:13px">${optGUT(d.gut_t||3)}</select>
+          </td>
+          <td style="text-align:center">
+            <span data-gut="total" style="font-weight:700;font-size:15px;color:var(--azul)">${d.gut_total||'—'}</span>
+          </td>
+          <td class="col-num">${formatMoeda(d.valor_estimado)}</td>
+        </tr>`).join('');
+
+      // Inicializar calculadoras GUT em cada linha
+      document.querySelectorAll('#tbody-gut tr').forEach(function (row) {
+        initGutCalc(row);
+      });
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="alert alert-danger">Erro: ${err.message}</div></td></tr>`;
+    }
+  }
+
+  document.getElementById('btn-salvar-gut').addEventListener('click', async function () {
+    if (_demandas.length === 0) { showToast('Nenhuma demanda para priorizar.', 'error'); return; }
+
+    setLoading(this, true);
+    try {
+      // Coletar valores e calcular GUT
+      const rows = [];
+      document.querySelectorAll('#tbody-gut tr').forEach(function (row) {
+        const id = row.dataset.id;
+        if (!id) return;
+        const g = parseInt(row.querySelector('[data-gut="g"]').value);
+        const u = parseInt(row.querySelector('[data-gut="u"]').value);
+        const t = parseInt(row.querySelector('[data-gut="t"]').value);
+        rows.push({ id, g, u, t, gut: g*u*t });
+      });
+
+      // Ordenar por GUT decrescente para atribuir prioridade
+      rows.sort((a,b) => b.gut - a.gut);
+
+      for (let i = 0; i < rows.length; i++) {
+        await salvarGut(rows[i].id, rows[i].g, rows[i].u, rows[i].t, i+1, perfil.id);
+      }
+
+      showToast('Priorização salva. ' + rows.length + ' demanda(s) priorizadas.', 'success');
+      carregarGUT();
+    } catch (err) {
+      showToast('Erro ao salvar: ' + err.message, 'error');
+    } finally {
+      setLoading(this, false);
+    }
+  });
+
+  carregarGUT();
+})();
+</script>
+</body>
+</html>

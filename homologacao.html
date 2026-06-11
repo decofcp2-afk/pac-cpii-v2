@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Homologação — PAC CPII</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header id="app-header">
+  <div class="header-left">
+    <button id="btn-menu-mobile">☰</button>
+    <div style="width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">CP</div>
+    <div class="header-title">PAC — Colégio Pedro II<small>Plano Anual de Contratações</small></div>
+  </div>
+  <div class="header-right">
+    <span class="campus-label" id="header-campus"></span>
+    <span id="header-nome"></span>
+    <button id="btn-logout">Sair</button>
+  </div>
+</header>
+<aside id="app-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+<main id="app-main">
+  <div class="page-header">
+    <div><h1>Homologação do Plano</h1><p id="subtitulo"></p></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="sel-exercicio"></select>
+    </div>
+  </div>
+
+  <!-- Resumo -->
+  <div class="stats-grid" id="resumo-stats">
+    <div class="stat-card"><div class="stat-label">Demandas priorizadas</div><div class="stat-value azul" id="st-priorizadas">—</div></div>
+    <div class="stat-card"><div class="stat-label">Já homologadas</div><div class="stat-value dourado" id="st-homologadas">—</div></div>
+    <div class="stat-card"><div class="stat-label">Valor total a homologar</div><div class="stat-value" id="st-valor" style="font-size:17px">—</div></div>
+  </div>
+
+  <!-- Aviso e botão de homologação -->
+  <div class="card">
+    <div class="card-title">Ação de homologação</div>
+    <div id="alerta-homologacao" class="alert alert-info" style="margin-bottom:16px">
+      Carregando dados do exercício…
+    </div>
+    <div id="acoes-homologacao" style="display:none">
+      <p style="font-size:13px;color:var(--cinza-medio);margin-bottom:16px">
+        A homologação é irreversível nesta etapa (exceto por reversão do perfil Licitações).
+        Todas as demandas <strong>priorizadas</strong> passarão para <strong>homologada</strong> de uma vez.
+      </p>
+      <button class="btn btn-warning" id="btn-homologar">🏛️ Homologar plano</button>
+    </div>
+  </div>
+
+  <!-- Lista de demandas priorizadas -->
+  <div class="card">
+    <div class="card-title">Demandas priorizadas (pré-homologação)</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Prioridade</th><th>Objeto</th><th>Unidade</th>
+          <th style="text-align:center">GUT</th><th class="col-num">Valor est.</th>
+        </tr></thead>
+        <tbody id="tbody-prioridades">
+          <tr><td colspan="5"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase.js"></script>
+<script src="ui.js"></script>
+<script src="auth.js"></script>
+<script>
+(async function () {
+  const perfil = await initAuth(['ord_despesas','licitacoes']);
+  if (!perfil) return;
+  buildSidebar(perfil);
+  initUI();
+  document.getElementById('subtitulo').textContent = perfil.campus ? perfil.campus.nome : '';
+
+  const selEx = document.getElementById('sel-exercicio');
+  const anoAtual = new Date().getFullYear();
+  for (let a = anoAtual; a >= anoAtual-4; a--) {
+    const opt = document.createElement('option');
+    opt.value = a; opt.textContent = a;
+    if (a === anoAtual) opt.selected = true;
+    selEx.appendChild(opt);
+  }
+  selEx.addEventListener('change', carregarDados);
+
+  async function carregarDados() {
+    const exercicio = parseInt(selEx.value);
+    const tbody = document.getElementById('tbody-prioridades');
+    tbody.innerHTML = '<tr><td colspan="5"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>';
+
+    try {
+      const [priorizadas, homologadas] = await Promise.all([
+        listarDemandasDoCampus(perfil.campus_id, exercicio, 'priorizada'),
+        listarDemandasDoCampus(perfil.campus_id, exercicio, 'homologada')
+      ]);
+
+      document.getElementById('st-priorizadas').textContent = priorizadas.length;
+      document.getElementById('st-homologadas').textContent = homologadas.length;
+      const valor = priorizadas.reduce((s,d) => s+Number(d.valor_estimado||0), 0);
+      document.getElementById('st-valor').textContent = formatMoeda(valor);
+
+      const alerta = document.getElementById('alerta-homologacao');
+      const acoes  = document.getElementById('acoes-homologacao');
+
+      if (homologadas.length > 0 && priorizadas.length === 0) {
+        alerta.className = 'alert alert-info';
+        alerta.innerHTML = '✅ O plano deste exercício já foi homologado. ' + homologadas.length + ' demanda(s) homologada(s).';
+        acoes.style.display = 'none';
+      } else if (priorizadas.length === 0) {
+        alerta.className = 'alert alert-warning';
+        alerta.innerHTML = '⚠️ Não há demandas priorizadas para homologar. Realize a priorização GUT primeiro.';
+        acoes.style.display = 'none';
+      } else {
+        alerta.className = 'alert alert-info';
+        alerta.innerHTML = `ℹ️ ${priorizadas.length} demanda(s) priorizada(s) prontas para homologação. Valor total: <strong>${formatMoeda(valor)}</strong>.`;
+        acoes.style.display = '';
+      }
+
+      if (priorizadas.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">
+          <p>Nenhuma demanda priorizada para este exercício.</p>
+        </div></td></tr>`;
+      } else {
+        tbody.innerHTML = priorizadas.map(d => `<tr>
+          <td style="font-weight:700;color:var(--azul)">#${d.gut_prioridade||'—'}</td>
+          <td>${d.descricao_objeto.substring(0,60)}${d.descricao_objeto.length>60?'…':''}</td>
+          <td>${d.unidade?d.unidade.sigla:'—'}</td>
+          <td style="text-align:center;font-weight:700;color:var(--dourado)">${d.gut_total||'—'}</td>
+          <td class="col-num">${formatMoeda(d.valor_estimado)}</td>
+        </tr>`).join('');
+      }
+
+      window._exercicioAtual = exercicio;
+    } catch (err) {
+      showToast('Erro ao carregar: ' + err.message, 'error');
+    }
+  }
+
+  document.getElementById('btn-homologar').addEventListener('click', function () {
+    showModal({
+      titulo: 'Homologar plano ' + window._exercicioAtual,
+      mensagem: 'Esta ação tornará o plano público e não poderá ser desfeita sem intervenção do perfil Licitações. Confirme com sua senha.',
+      confirmLabel: 'Homologar plano', confirmClass: 'btn-warning',
+      requireSenha: true,
+      onConfirm: async function ({ senha }) {
+        const ok = await verificarSenha(senha);
+        if (!ok) { showToast('Senha incorreta.', 'error'); return; }
+        const btn = document.getElementById('btn-homologar');
+        setLoading(btn, true);
+        try {
+          const n = await homologarPlano(perfil.campus_id, window._exercicioAtual, perfil.id);
+          showToast('Plano homologado. ' + n + ' demanda(s) publicadas.', 'success');
+          carregarDados();
+        } catch (err) {
+          showToast('Erro ao homologar: ' + err.message, 'error');
+        } finally {
+          setLoading(btn, false);
+        }
+      }
+    });
+  });
+
+  carregarDados();
+})();
+</script>
+</body>
+</html>

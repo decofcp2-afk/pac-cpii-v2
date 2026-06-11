@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Demandas — PAC CPII</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header id="app-header">
+  <div class="header-left">
+    <button id="btn-menu-mobile">☰</button>
+    <div style="width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">CP</div>
+    <div class="header-title">PAC — Colégio Pedro II<small>Plano Anual de Contratações</small></div>
+  </div>
+  <div class="header-right">
+    <span class="campus-label" id="header-campus"></span>
+    <span id="header-nome"></span>
+    <button id="btn-logout">Sair</button>
+  </div>
+</header>
+
+<aside id="app-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+<main id="app-main">
+  <!-- Lista de demandas -->
+  <div id="view-lista">
+    <div class="page-header">
+      <div><h1 id="titulo-lista">Demandas</h1><p id="subtitulo-lista"></p></div>
+      <button class="btn btn-primary" id="btn-nova" style="display:none">+ Nova demanda</button>
+    </div>
+
+    <div class="filters">
+      <select id="sel-exercicio"></select>
+      <select id="sel-status">
+        <option value="">Todos os status</option>
+        <option value="rascunho">Rascunho</option>
+        <option value="submetida">Submetida</option>
+        <option value="de_acordo">De acordo</option>
+        <option value="reprovada">Reprovada</option>
+        <option value="priorizada">Priorizada</option>
+        <option value="homologada">Homologada</option>
+      </select>
+      <input type="text" id="busca" placeholder="Buscar por objeto…" style="min-width:200px">
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>#</th><th>Objeto</th><th>Unidade</th><th>Status</th>
+            <th class="col-num">Qtd</th><th class="col-num">Valor estimado</th><th>Data</th><th class="col-actions">Ações</th>
+          </tr></thead>
+          <tbody id="tbody-demandas">
+            <tr><td colspan="8"><div class="loading-overlay"><span class="spinner"></span> Carregando…</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Formulário nova/editar demanda -->
+  <div id="view-form" style="display:none">
+    <div class="page-header">
+      <div><h1 id="titulo-form">Nova demanda</h1></div>
+      <button class="btn btn-secondary" id="btn-voltar">← Voltar</button>
+    </div>
+
+    <div id="alerta-orcamento" class="alert alert-warning" style="display:none">
+      ⚠️ Sua unidade não possui dotação orçamentária cadastrada para este exercício. A demanda pode ser salva, mas informe ao ordenador.
+    </div>
+    <div id="alerta-reprovacao" class="alert alert-danger" style="display:none"></div>
+
+    <form id="form-demanda" novalidate>
+      <div class="card">
+        <div class="form-section-title">Identificação da demanda</div>
+        <div class="form-grid form-grid-2">
+          <div class="form-group" style="grid-column:1/-1">
+            <label>Descrição do objeto <span style="color:#EF4444">*</span></label>
+            <input type="text" id="f-objeto" maxlength="300" placeholder="Máximo 300 caracteres (art. 8.3.2.1)">
+            <div style="display:flex;justify-content:space-between">
+              <span class="field-error" id="f-objeto-err" style="display:none"></span>
+              <span class="char-count" id="f-objeto-count">0/300</span>
+            </div>
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label>Justificativa <span style="color:#EF4444">*</span></label>
+            <textarea id="f-justificativa" rows="4" placeholder="Fundamentação da necessidade (art. 8.3.2.2)"></textarea>
+            <span class="field-error" id="f-just-err" style="display:none"></span>
+          </div>
+          <div class="form-group">
+            <label>Quantidade <span style="color:#EF4444">*</span></label>
+            <input type="number" id="f-quantidade" min="0.001" step="any" placeholder="0">
+            <span class="field-error" id="f-qtd-err" style="display:none"></span>
+          </div>
+          <div class="form-group">
+            <label>Unidade de medida <span style="color:#EF4444">*</span></label>
+            <select id="f-medida">
+              <option value="">Selecione…</option>
+              <option value="unidade">Unidade</option>
+              <option value="serviço">Serviço</option>
+              <option value="m²">m²</option>
+              <option value="m³">m³</option>
+              <option value="metro linear">Metro linear</option>
+              <option value="hora">Hora</option>
+              <option value="mês">Mês</option>
+              <option value="ano">Ano</option>
+              <option value="kg">Kg</option>
+              <option value="litro">Litro</option>
+              <option value="resma">Resma</option>
+              <option value="caixa">Caixa</option>
+              <option value="outro">Outro</option>
+            </select>
+            <span class="field-error" id="f-medida-err" style="display:none"></span>
+          </div>
+          <div class="form-group">
+            <label>Valor estimado (R$) <span style="color:#EF4444">*</span></label>
+            <input type="number" id="f-valor" min="0" step="0.01" placeholder="0,00">
+            <span class="field-error" id="f-valor-err" style="display:none"></span>
+          </div>
+          <div class="form-group" style="justify-content:center;padding-top:20px">
+            <div class="form-check">
+              <input type="checkbox" id="f-exclusiva">
+              <label for="f-exclusiva">Demanda exclusiva para ME/EPP (art. 8.3.2.7)</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section-title">Contrato existente (art. 8.3.2.6)</div>
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <div class="form-check">
+              <input type="checkbox" id="f-possui-contrato">
+              <label for="f-possui-contrato">Possui contrato vigente</label>
+            </div>
+          </div>
+          <div class="form-group" id="grupo-risco" style="display:none">
+            <div class="form-check">
+              <input type="checkbox" id="f-risco">
+              <label for="f-risco">Há risco de não prorrogação</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="form-section-title">Gestor e fiscal do contrato (art. 8.3.2.5)</div>
+        <div class="form-grid form-grid-3">
+          <!-- Gestor Titular -->
+          <div style="grid-column:1/-1"><strong style="font-size:13px">Gestor Titular</strong></div>
+          <div class="form-group">
+            <label>Nome completo <span style="color:#EF4444">*</span></label>
+            <input type="text" id="f-gt-nome" placeholder="Nome completo">
+            <span class="field-error" id="f-gt-nome-err" style="display:none"></span>
+          </div>
+          <div class="form-group">
+            <label>Matrícula SIAPE <span style="color:#EF4444">*</span></label>
+            <input type="text" id="f-gt-siape" placeholder="7 dígitos" maxlength="7">
+            <span class="field-error" id="f-gt-siape-err" style="display:none"></span>
+          </div>
+          <div class="form-group">
+            <label>E-mail institucional <span style="color:#EF4444">*</span></label>
+            <input type="email" id="f-gt-email" placeholder="nome@cp2.g12.br">
+            <span class="field-error" id="f-gt-email-err" style="display:none"></span>
+          </div>
+
+          <!-- Gestor Substituto -->
+          <div style="grid-column:1/-1;margin-top:8px"><strong style="font-size:13px">Gestor Substituto</strong></div>
+          <div class="form-group">
+            <label>Nome completo <span style="color:#EF4444">*</span></label>
+            <input type="text" id="f-gs-nome" placeholder="Nome completo">
+            <span class="field-error" id="f-gs-nome-err" style="display:none"></span>
+          </div>
+          <div class="form-group">
+            <label>Matrícula SIAPE <span style="color:#EF4444">*</span></label>
+            <input type="text" id="f-gs-siape" placeholder="7 dígitos" maxlength="7">
+            <span class="field-error" id="f-gs-siape-err" style="display:none"></span>
+          </div>
+          <div class="form-group">
+            <label>E-mail institucional <span style="color:#EF4444">*</span></label>
+            <input type="email" id="f-gs-email" placeholder="nome@cp2.g12.br">
+            <span class="field-error" id="f-gs-email-err" style="display:none"></span>
+          </div>
+
+          <!-- Fiscal Titular -->
+          <div style="grid-column:1/-1;margin-top:8px"><strong style="font-size:13px">Fiscal Titular</strong></div>
+          <div class="form-group">
+            <label>Nome completo <span style="color:#EF4444">*</span></label>
+            <input type="text" id="f-ft-nome" placeholder="Nome completo">
+            <span class="field-error" id="f-ft-nome-err" style="display:none"></span>
+          </div>
+          <div class="form-group">
+            <label>Matrícula SIAPE <span style="color:#EF4444">*</span></label>
+            <input type="text" id="f-ft-siape" placeholder="7 dígitos" maxlength="7">
+            <span class="field-error" id="f-ft-siape-err" style="display:none"></span>
+          </div>
+          <div class="form-group">
+            <label>E-mail institucional <span style="color:#EF4444">*</span></label>
+            <input type="email" id="f-ft-email" placeholder="nome@cp2.g12.br">
+            <span class="field-error" id="f-ft-email-err" style="display:none"></span>
+          </div>
+
+          <!-- Fiscal Substituto -->
+          <div style="grid-column:1/-1;margin-top:8px"><strong style="font-size:13px">Fiscal Substituto</strong></div>
+          <div class="form-group">
+            <label>Nome completo <span style="color:#EF4444">*</span></label>
+            <input type="text" id="f-fs-nome" placeholder="Nome completo">
+            <span class="field-error" id="f-fs-nome-err" style="display:none"></span>
+          </div>
+          <div class="form-group">
+            <label>Matrícula SIAPE <span style="color:#EF4444">*</span></label>
+            <input type="text" id="f-fs-siape" placeholder="7 dígitos" maxlength="7">
+            <span class="field-error" id="f-fs-siape-err" style="display:none"></span>
+          </div>
+          <div class="form-group">
+            <label>E-mail institucional <span style="color:#EF4444">*</span></label>
+            <input type="email" id="f-fs-email" placeholder="nome@cp2.g12.br">
+            <span class="field-error" id="f-fs-email-err" style="display:none"></span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;padding-top:4px">
+        <button type="button" class="btn btn-secondary" id="btn-salvar-rascunho">Salvar rascunho</button>
+        <button type="button" class="btn btn-primary" id="btn-enviar">Enviar demanda</button>
+      </div>
+    </form>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase.js"></script>
+<script src="ui.js"></script>
+<script src="auth.js"></script>
+<script>
+(async function () {
+  const perfil = await initAuth();
+  if (!perfil) return;
+  buildSidebar(perfil);
+  initUI();
+
+  const podeEditar = ['chefe_secao'].includes(perfil.papel);
+  const podeVerTudo = ['ord_despesas','chefia','licitacoes','administrador'].includes(perfil.papel);
+  let demandaEditandoId = null;
+  let exercicioAtual = new Date().getFullYear();
+
+  // Seletor de exercício
+  const selEx = document.getElementById('sel-exercicio');
+  for (let a = exercicioAtual; a >= exercicioAtual - 4; a--) {
+    const opt = document.createElement('option');
+    opt.value = a; opt.textContent = a;
+    if (a === exercicioAtual) opt.selected = true;
+    selEx.appendChild(opt);
+  }
+
+  if (podeEditar) {
+    document.getElementById('btn-nova').style.display = '';
+    if (perfil.papel === 'chefe_secao') {
+      document.getElementById('titulo-lista').textContent = 'Minhas Demandas';
+    }
+  }
+
+  // Título e subtítulo
+  document.getElementById('subtitulo-lista').textContent =
+    perfil.campus ? perfil.campus.nome + ' — ' + (perfil.unidade ? perfil.unidade.sigla : '') : '';
+
+  // Contagem de chars
+  const objInput = document.getElementById('f-objeto');
+  const objCount = document.getElementById('f-objeto-count');
+  objInput.addEventListener('input', function () { objCount.textContent = objInput.value.length + '/300'; });
+
+  // Contrato toggle
+  document.getElementById('f-possui-contrato').addEventListener('change', function () {
+    document.getElementById('grupo-risco').style.display = this.checked ? '' : 'none';
+    if (!this.checked) document.getElementById('f-risco').checked = false;
+  });
+
+  // ── Carregar lista ─────────────────────────────────────── //
+  async function carregarLista() {
+    const status = document.getElementById('sel-status').value;
+    const busca  = document.getElementById('busca').value.toLowerCase();
+    exercicioAtual = parseInt(selEx.value);
+    const tbody = document.getElementById('tbody-demandas');
+    tbody.innerHTML = '<tr><td colspan="8"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>';
+
+    try {
+      let demandas;
+      if (podeVerTudo) {
+        demandas = await listarDemandasDoCampus(perfil.campus_id, exercicioAtual, status || undefined);
+      } else {
+        demandas = await listarDemandasDaUnidade(perfil.unidade_id, exercicioAtual, status || undefined);
+      }
+
+      if (busca) demandas = demandas.filter(d => d.descricao_objeto.toLowerCase().includes(busca));
+
+      if (demandas.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8">
+          <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            <h3>Nenhuma demanda encontrada</h3>
+            <p>Ajuste os filtros ou crie uma nova demanda.</p>
+            ${podeEditar ? '<button class="btn btn-primary btn-sm" onclick="mostrarForm()">+ Nova demanda</button>' : ''}
+          </div></td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = demandas.map((d, i) => `
+        <tr>
+          <td style="color:var(--cinza-medio);font-size:12px">${i+1}</td>
+          <td><span title="${d.descricao_objeto}">${d.descricao_objeto.substring(0,50)}${d.descricao_objeto.length>50?'…':''}</span></td>
+          <td>${d.unidade ? d.unidade.sigla : '—'}</td>
+          <td>${statusBadge(d.status)}</td>
+          <td class="col-num">${Number(d.quantidade).toLocaleString('pt-BR')}</td>
+          <td class="col-num">${formatMoeda(d.valor_estimado)}</td>
+          <td>${formatData(d.criado_em)}</td>
+          <td class="col-actions">
+            ${d.status === 'rascunho' && (d.criado_por === perfil.id || isLicitacoes()) ?
+              `<button class="btn btn-sm btn-secondary" onclick="editarDemanda('${d.id}')">Editar</button>
+               <button class="btn btn-sm btn-danger" onclick="confirmarExcluir('${d.id}')">Excluir</button>` :
+              `<button class="btn btn-sm btn-secondary" onclick="verDetalhes('${d.id}')">Ver</button>`
+            }
+            ${d.status === 'reprovada' && d.criado_por === perfil.id ?
+              `<button class="btn btn-sm btn-warning" onclick="editarDemanda('${d.id}')">Reenviar</button>` : ''
+            }
+          </td>
+        </tr>`).join('');
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="8"><div class="alert alert-danger">Erro ao carregar demandas.</div></td></tr>';
+    }
+  }
+
+  selEx.addEventListener('change', carregarLista);
+  document.getElementById('sel-status').addEventListener('change', carregarLista);
+  document.getElementById('busca').addEventListener('input', carregarLista);
+  document.getElementById('btn-nova').addEventListener('click', function () { mostrarForm(); });
+  document.getElementById('btn-voltar').addEventListener('click', function () { mostrarLista(); });
+
+  // ── Form ────────────────────────────────────────────────── //
+  function mostrarLista() {
+    document.getElementById('view-lista').style.display = '';
+    document.getElementById('view-form').style.display = 'none';
+    demandaEditandoId = null;
+    carregarLista();
+  }
+
+  async function mostrarForm(id) {
+    document.getElementById('view-lista').style.display = 'none';
+    document.getElementById('view-form').style.display = '';
+    limparForm();
+
+    // Verificar se há dotação para o exercício (RN01)
+    try {
+      const dots = await listarDotacoes(perfil.campus_id, exercicioAtual);
+      const dotUn = dots.filter(d => d.unidade_id === perfil.unidade_id);
+      document.getElementById('alerta-orcamento').style.display = dotUn.length === 0 ? '' : 'none';
+    } catch {}
+
+    if (id) {
+      demandaEditandoId = id;
+      document.getElementById('titulo-form').textContent = 'Editar demanda';
+      const d = await getDemanda(id);
+      preencherForm(d);
+
+      if (d.status === 'reprovada') {
+        const hist = await listarHistorico(id);
+        const rep = hist.filter(h => h.acao === 'reprovacao').pop();
+        if (rep) {
+          document.getElementById('alerta-reprovacao').textContent =
+            '⚠️ Demanda reprovada. Justificativa: ' + (rep.justificativa || '—');
+          document.getElementById('alerta-reprovacao').style.display = '';
+        }
+      }
+    } else {
+      document.getElementById('titulo-form').textContent = 'Nova demanda';
+    }
+  }
+
+  window.mostrarForm   = mostrarForm;
+  window.editarDemanda = function (id) { mostrarForm(id); };
+
+  window.verDetalhes = function (id) {
+    mostrarForm(id);
+    // Desabilitar campos no modo visualização
+    document.querySelectorAll('#form-demanda input, #form-demanda select, #form-demanda textarea')
+      .forEach(el => el.disabled = true);
+    document.getElementById('btn-salvar-rascunho').style.display = 'none';
+    document.getElementById('btn-enviar').style.display = 'none';
+    document.getElementById('titulo-form').textContent = 'Visualizar demanda';
+  };
+
+  window.confirmarExcluir = function (id) {
+    showModal({
+      titulo: 'Excluir demanda',
+      mensagem: 'Esta ação é irreversível. Deseja excluir este rascunho?',
+      confirmLabel: 'Excluir', confirmClass: 'btn-danger',
+      onConfirm: async function () {
+        try {
+          await excluirDemanda(id);
+          showToast('Rascunho excluído.', 'success');
+          carregarLista();
+        } catch (err) {
+          showToast('Erro ao excluir: ' + err.message, 'error');
+        }
+      }
+    });
+  };
+
+  function limparForm() {
+    document.getElementById('form-demanda').reset();
+    document.getElementById('alerta-reprovacao').style.display = 'none';
+    document.getElementById('grupo-risco').style.display = 'none';
+    document.getElementById('f-objeto-count').textContent = '0/300';
+    document.querySelectorAll('.field-error').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('#form-demanda input, #form-demanda select, #form-demanda textarea')
+      .forEach(el => el.disabled = false);
+    document.getElementById('btn-salvar-rascunho').style.display = '';
+    document.getElementById('btn-enviar').style.display = '';
+  }
+
+  function preencherForm(d) {
+    document.getElementById('f-objeto').value      = d.descricao_objeto || '';
+    document.getElementById('f-objeto-count').textContent = (d.descricao_objeto||'').length + '/300';
+    document.getElementById('f-justificativa').value = d.justificativa || '';
+    document.getElementById('f-quantidade').value  = d.quantidade || '';
+    document.getElementById('f-medida').value      = d.unidade_medida || '';
+    document.getElementById('f-valor').value       = d.valor_estimado || '';
+    document.getElementById('f-exclusiva').checked = d.exclusiva || false;
+    document.getElementById('f-possui-contrato').checked = d.possui_contrato || false;
+    if (d.possui_contrato) document.getElementById('grupo-risco').style.display = '';
+    document.getElementById('f-risco').checked     = d.risco_nao_prorrogacao || false;
+    document.getElementById('f-gt-nome').value     = d.gestor_titular_nome || '';
+    document.getElementById('f-gt-siape').value    = d.gestor_titular_siape || '';
+    document.getElementById('f-gt-email').value    = d.gestor_titular_email || '';
+    document.getElementById('f-gs-nome').value     = d.gestor_substituto_nome || '';
+    document.getElementById('f-gs-siape').value    = d.gestor_substituto_siape || '';
+    document.getElementById('f-gs-email').value    = d.gestor_substituto_email || '';
+    document.getElementById('f-ft-nome').value     = d.fiscal_titular_nome || '';
+    document.getElementById('f-ft-siape').value    = d.fiscal_titular_siape || '';
+    document.getElementById('f-ft-email').value    = d.fiscal_titular_email || '';
+    document.getElementById('f-fs-nome').value     = d.fiscal_substituto_nome || '';
+    document.getElementById('f-fs-siape').value    = d.fiscal_substituto_siape || '';
+    document.getElementById('f-fs-email').value    = d.fiscal_substituto_email || '';
+  }
+
+  function coletarForm() {
+    return {
+      campus_id:               perfil.campus_id,
+      unidade_id:              perfil.unidade_id,
+      criado_por:              perfil.id,
+      exercicio:               exercicioAtual,
+      descricao_objeto:        document.getElementById('f-objeto').value.trim(),
+      justificativa:           document.getElementById('f-justificativa').value.trim(),
+      quantidade:              parseFloat(document.getElementById('f-quantidade').value),
+      unidade_medida:          document.getElementById('f-medida').value,
+      valor_estimado:          parseFloat(document.getElementById('f-valor').value),
+      exclusiva:               document.getElementById('f-exclusiva').checked,
+      possui_contrato:         document.getElementById('f-possui-contrato').checked,
+      risco_nao_prorrogacao:   document.getElementById('f-risco').checked,
+      gestor_titular_nome:     document.getElementById('f-gt-nome').value.trim(),
+      gestor_titular_siape:    document.getElementById('f-gt-siape').value.trim(),
+      gestor_titular_email:    document.getElementById('f-gt-email').value.trim(),
+      gestor_substituto_nome:  document.getElementById('f-gs-nome').value.trim(),
+      gestor_substituto_siape: document.getElementById('f-gs-siape').value.trim(),
+      gestor_substituto_email: document.getElementById('f-gs-email').value.trim(),
+      fiscal_titular_nome:     document.getElementById('f-ft-nome').value.trim(),
+      fiscal_titular_siape:    document.getElementById('f-ft-siape').value.trim(),
+      fiscal_titular_email:    document.getElementById('f-ft-email').value.trim(),
+      fiscal_substituto_nome:  document.getElementById('f-fs-nome').value.trim(),
+      fiscal_substituto_siape: document.getElementById('f-fs-siape').value.trim(),
+      fiscal_substituto_email: document.getElementById('f-fs-email').value.trim(),
+    };
+  }
+
+  const SIAPE_RE = /^\d{7}$/;
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function validarForm() {
+    let ok = true;
+    function err(id, msg) { const el = document.getElementById(id+'-err'); if(el){el.textContent=msg;el.style.display=msg?'':'none';} if(msg) ok=false; }
+
+    const obj = document.getElementById('f-objeto').value.trim();
+    if (!obj) err('f-objeto','Campo obrigatório.');
+    else if (obj.length > 300) err('f-objeto','Máximo de 300 caracteres.');
+    else err('f-objeto','');
+
+    if (!document.getElementById('f-justificativa').value.trim()) err('f-just','Campo obrigatório.'); else err('f-just','');
+    const qtd = parseFloat(document.getElementById('f-quantidade').value);
+    if (!qtd || qtd <= 0) err('f-qtd','Informe uma quantidade positiva.'); else err('f-qtd','');
+    if (!document.getElementById('f-medida').value) err('f-medida','Selecione a unidade.'); else err('f-medida','');
+    const val = parseFloat(document.getElementById('f-valor').value);
+    if (isNaN(val) || val < 0) err('f-valor','Informe um valor válido.'); else err('f-valor','');
+
+    const campos = [
+      ['f-gt-nome','f-gt-nome'],['f-gt-siape','f-gt-siape'],['f-gt-email','f-gt-email'],
+      ['f-gs-nome','f-gs-nome'],['f-gs-siape','f-gs-siape'],['f-gs-email','f-gs-email'],
+      ['f-ft-nome','f-ft-nome'],['f-ft-siape','f-ft-siape'],['f-ft-email','f-ft-email'],
+      ['f-fs-nome','f-fs-nome'],['f-fs-siape','f-fs-siape'],['f-fs-email','f-fs-email'],
+    ];
+    campos.forEach(function([fId, errId]) {
+      const v = document.getElementById(fId).value.trim();
+      if (!v) { err(errId, 'Campo obrigatório.'); return; }
+      if (fId.includes('siape') && !SIAPE_RE.test(v)) { err(errId, 'SIAPE deve ter 7 dígitos numéricos.'); return; }
+      if (fId.includes('email') && !EMAIL_RE.test(v)) { err(errId, 'E-mail inválido.'); return; }
+      err(errId, '');
+    });
+
+    return ok;
+  }
+
+  async function salvar(status) {
+    if (!validarForm()) return;
+    const dados = coletarForm();
+    dados.status = status;
+
+    const btn = status === 'rascunho'
+      ? document.getElementById('btn-salvar-rascunho')
+      : document.getElementById('btn-enviar');
+
+    if (status === 'submetida') {
+      showModal({
+        titulo: 'Enviar demanda',
+        mensagem: 'Após o envio, a demanda não poderá ser editada até a aprovação. Confirme com sua senha.',
+        confirmLabel: 'Enviar demanda', confirmClass: 'btn-primary',
+        requireSenha: true,
+        onConfirm: async function ({ senha }) {
+          const ok = await verificarSenha(senha);
+          if (!ok) { showToast('Senha incorreta.', 'error'); return; }
+          await salvarEfetivo(dados, btn, 'submetida');
+        }
+      });
+    } else {
+      await salvarEfetivo(dados, btn, 'rascunho');
+    }
+  }
+
+  async function salvarEfetivo(dados, btn, status) {
+    setLoading(btn, true);
+    try {
+      if (demandaEditandoId) {
+        await atualizarDemanda(demandaEditandoId, dados);
+        if (status === 'submetida') await enviarDemanda(demandaEditandoId, perfil.id);
+        showToast(status === 'submetida' ? 'Demanda enviada para aprovação.' : 'Rascunho salvo.', 'success');
+      } else {
+        const nova = await criarDemanda(dados);
+        if (status === 'submetida') await enviarDemanda(nova.id, perfil.id);
+        showToast(status === 'submetida' ? 'Demanda enviada para aprovação.' : 'Rascunho salvo.', 'success');
+      }
+      mostrarLista();
+    } catch (err) {
+      showToast('Erro ao salvar: ' + err.message, 'error');
+    } finally {
+      setLoading(btn, false);
+    }
+  }
+
+  document.getElementById('btn-salvar-rascunho').addEventListener('click', function () { salvar('rascunho'); });
+  document.getElementById('btn-enviar').addEventListener('click', function () { salvar('submetida'); });
+
+  carregarLista();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Orçamento — PAC CPII</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header id="app-header">
+  <div class="header-left">
+    <button id="btn-menu-mobile">☰</button>
+    <div style="width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">CP</div>
+    <div class="header-title">PAC — Colégio Pedro II<small>Plano Anual de Contratações</small></div>
+  </div>
+  <div class="header-right">
+    <span class="campus-label" id="header-campus"></span>
+    <span id="header-nome"></span>
+    <button id="btn-logout">Sair</button>
+  </div>
+</header>
+<aside id="app-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+<main id="app-main">
+  <div class="page-header">
+    <div><h1>Orçamento</h1><p id="subtitulo">Dotações e distribuições</p></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="sel-exercicio"></select>
+      <button class="btn btn-primary" id="btn-nova-dotacao">+ Nova dotação</button>
+    </div>
+  </div>
+
+  <!-- Dotações da unidade -->
+  <div class="card">
+    <div class="card-title">Dotações da minha unidade</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Categoria</th><th class="col-num">Valor total</th>
+          <th class="col-num">Distribuído</th><th class="col-num">Saldo</th><th class="col-actions">Ações</th>
+        </tr></thead>
+        <tbody id="tbody-dotacoes">
+          <tr><td colspan="5"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Distribuir orçamento -->
+  <div class="card" id="card-distribuir" style="display:none">
+    <div class="card-title">Distribuir para unidades subordinadas</div>
+    <p style="color:var(--cinza-medio);font-size:13px;margin-bottom:16px">
+      Selecione a dotação e informe o valor a distribuir para cada unidade filha direta.
+    </p>
+    <div class="form-grid form-grid-2" style="margin-bottom:16px">
+      <div class="form-group">
+        <label>Dotação de origem</label>
+        <select id="sel-dotacao-dist"></select>
+      </div>
+      <div class="form-group">
+        <label>Saldo disponível</label>
+        <input type="text" id="saldo-disp" readonly style="background:var(--azul-claro);font-weight:600">
+      </div>
+    </div>
+    <div id="form-distribuicoes"></div>
+    <button class="btn btn-primary" id="btn-salvar-dist" style="margin-top:12px">Salvar distribuições</button>
+  </div>
+
+  <!-- Distribuições recebidas (se for chefia/secao) -->
+  <div class="card" id="card-recebidos">
+    <div class="card-title">Orçamento recebido (desta unidade)</div>
+    <div id="lista-recebidos"><div class="loading-overlay"><span class="spinner"></span></div></div>
+  </div>
+</main>
+
+<!-- Modal nova dotação -->
+<div id="modal-dotacao" style="display:none">
+  <div class="modal-backdrop" id="backdrop-dotacao">
+    <div class="modal">
+      <h2>Nova dotação</h2>
+      <p>Crie uma linha orçamentária para sua unidade neste exercício.</p>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Categoria <span style="color:#EF4444">*</span></label>
+        <input type="text" id="nd-categoria" placeholder="Ex: Custeio – Materiais de Consumo">
+        <span class="field-error" id="nd-cat-err" style="display:none"></span>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Valor total (R$) <span style="color:#EF4444">*</span></label>
+        <input type="number" id="nd-valor" min="0" step="0.01" placeholder="0,00">
+        <span class="field-error" id="nd-val-err" style="display:none"></span>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="btn-cancelar-dot">Cancelar</button>
+        <button class="btn btn-primary" id="btn-criar-dot">Criar dotação</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase.js"></script>
+<script src="ui.js"></script>
+<script src="auth.js"></script>
+<script>
+(async function () {
+  const perfil = await initAuth(['ord_despesas','chefia','licitacoes']);
+  if (!perfil) return;
+  buildSidebar(perfil);
+  initUI();
+
+  const selEx = document.getElementById('sel-exercicio');
+  const anoAtual = new Date().getFullYear();
+  for (let a = anoAtual; a >= anoAtual-4; a--) {
+    const opt = document.createElement('option');
+    opt.value = a; opt.textContent = a;
+    if (a === anoAtual) opt.selected = true;
+    selEx.appendChild(opt);
+  }
+  selEx.addEventListener('change', carregarTudo);
+
+  document.getElementById('subtitulo').textContent =
+    perfil.unidade ? perfil.unidade.nome : perfil.campus ? perfil.campus.nome : '';
+
+  // Modal nova dotação
+  document.getElementById('btn-nova-dotacao').addEventListener('click', function () {
+    document.getElementById('modal-dotacao').style.display = '';
+    document.getElementById('nd-categoria').value = '';
+    document.getElementById('nd-valor').value = '';
+    document.getElementById('nd-cat-err').style.display = 'none';
+    document.getElementById('nd-val-err').style.display = 'none';
+  });
+  document.getElementById('btn-cancelar-dot').addEventListener('click', function () {
+    document.getElementById('modal-dotacao').style.display = 'none';
+  });
+  document.getElementById('btn-criar-dot').addEventListener('click', async function () {
+    const cat = document.getElementById('nd-categoria').value.trim();
+    const val = parseFloat(document.getElementById('nd-valor').value);
+    let ok = true;
+    if (!cat) { document.getElementById('nd-cat-err').textContent='Campo obrigatório.'; document.getElementById('nd-cat-err').style.display=''; ok=false; }
+    else document.getElementById('nd-cat-err').style.display='none';
+    if (isNaN(val)||val<=0) { document.getElementById('nd-val-err').textContent='Informe um valor positivo.'; document.getElementById('nd-val-err').style.display=''; ok=false; }
+    else document.getElementById('nd-val-err').style.display='none';
+    if (!ok) return;
+
+    setLoading(this, true);
+    try {
+      await criarDotacao({
+        campus_id: perfil.campus_id, unidade_id: perfil.unidade_id,
+        exercicio: parseInt(selEx.value), categoria: cat, valor_total: val, valor_distribuido: 0
+      });
+      document.getElementById('modal-dotacao').style.display = 'none';
+      showToast('Dotação criada.', 'success');
+      carregarTudo();
+    } catch (err) { showToast('Erro: '+err.message,'error'); }
+    finally { setLoading(this, false); }
+  });
+
+  let _dotacoes = [];
+  let _filhos = [];
+
+  async function carregarTudo() {
+    const exercicio = parseInt(selEx.value);
+    await Promise.all([carregarDotacoes(exercicio), carregarRecebidos(exercicio)]);
+  }
+
+  async function carregarDotacoes(exercicio) {
+    const tbody = document.getElementById('tbody-dotacoes');
+    tbody.innerHTML = '<tr><td colspan="5"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>';
+    try {
+      const todas = await listarDotacoes(perfil.campus_id, exercicio);
+      _dotacoes = todas.filter(d => d.unidade_id === perfil.unidade_id);
+
+      // Carregar filhos para distribuição
+      _filhos = await listarFilhosDiretos(perfil.unidade_id);
+      const cardDist = document.getElementById('card-distribuir');
+      cardDist.style.display = _filhos.length > 0 && _dotacoes.length > 0 ? '' : 'none';
+
+      if (_dotacoes.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">
+          <div class="empty-icon">💰</div>
+          <h3>Nenhuma dotação cadastrada</h3>
+          <p>Crie uma dotação para este exercício usando o botão acima.</p>
+        </div></td></tr>`;
+      } else {
+        // Calcular saldos
+        const rows = await Promise.all(_dotacoes.map(async d => {
+          const dists = await listarDistribuicoes(perfil.campus_id, exercicio);
+          const distDot = dists.filter(x => x.dotacao_id === d.id);
+          const distribuido = distDot.reduce((s,x) => s+Number(x.valor), 0);
+          const saldo = Number(d.valor_total) - distribuido;
+          return { ...d, distribuido, saldo };
+        }));
+        _dotacoes = rows;
+
+        tbody.innerHTML = rows.map(d => `<tr>
+          <td>${d.categoria}</td>
+          <td class="col-num">${formatMoeda(d.valor_total)}</td>
+          <td class="col-num">${formatMoeda(d.distribuido)}</td>
+          <td class="col-num" style="font-weight:600;color:${d.saldo<0?'#EF4444':'#166534'}">${formatMoeda(d.saldo)}</td>
+          <td class="col-actions">
+            <button class="btn btn-sm btn-secondary" onclick="prepDistribuir('${d.id}')">Distribuir</button>
+            <button class="btn btn-sm btn-danger" onclick="excluirDot('${d.id}')">Excluir</button>
+          </td>
+        </tr>`).join('');
+
+        // Popular select de distribuição
+        const sel = document.getElementById('sel-dotacao-dist');
+        sel.innerHTML = _dotacoes.map(d => `<option value="${d.id}">${d.categoria} (saldo: ${formatMoeda(d.saldo)})</option>`).join('');
+        sel.addEventListener('change', atualizarSaldoDisplay);
+        atualizarSaldoDisplay();
+        renderFormDistribuicao();
+      }
+    } catch (err) { showToast('Erro ao carregar dotações: '+err.message,'error'); }
+  }
+
+  function atualizarSaldoDisplay() {
+    const id = document.getElementById('sel-dotacao-dist').value;
+    const dot = _dotacoes.find(d => d.id === id);
+    document.getElementById('saldo-disp').value = dot ? formatMoeda(dot.saldo) : '—';
+  }
+
+  function renderFormDistribuicao() {
+    const container = document.getElementById('form-distribuicoes');
+    container.innerHTML = _filhos.map(f => `
+      <div class="form-grid form-grid-2" style="align-items:center;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:500">${f.nome} (${f.sigla})</div>
+        <div class="form-group">
+          <input type="number" id="dist-${f.id}" min="0" step="0.01" placeholder="R$ 0,00"
+            data-unidade="${f.id}" style="width:100%">
+        </div>
+      </div>`).join('');
+  }
+
+  window.prepDistribuir = function (dotId) {
+    document.getElementById('sel-dotacao-dist').value = dotId;
+    atualizarSaldoDisplay();
+    document.getElementById('card-distribuir').scrollIntoView({behavior:'smooth'});
+  };
+
+  document.getElementById('btn-salvar-dist').addEventListener('click', async function () {
+    const dotId = document.getElementById('sel-dotacao-dist').value;
+    const dot = _dotacoes.find(d => d.id === dotId);
+    if (!dot) return;
+
+    const distribuicoes = _filhos.map(f => ({
+      unidade: f, valor: parseFloat(document.getElementById('dist-'+f.id).value) || 0
+    })).filter(x => x.valor > 0);
+
+    const totalNovo = distribuicoes.reduce((s,x) => s+x.valor, 0);
+    if (totalNovo > dot.saldo) {
+      showToast(`Valor total (${formatMoeda(totalNovo)}) excede o saldo disponível (${formatMoeda(dot.saldo)}).`, 'error');
+      return;
+    }
+    if (distribuicoes.length === 0) { showToast('Informe ao menos um valor.', 'error'); return; }
+
+    setLoading(this, true);
+    try {
+      for (const d of distribuicoes) {
+        await criarDistribuicao({
+          dotacao_id: dotId, campus_id: perfil.campus_id,
+          unidade_destino_id: d.unidade.id, valor: d.valor,
+          criado_por: perfil.id
+        });
+      }
+      showToast('Distribuições salvas.', 'success');
+      carregarTudo();
+    } catch (err) { showToast('Erro: '+err.message,'error'); }
+    finally { setLoading(this, false); }
+  });
+
+  window.excluirDot = function (id) {
+    showModal({
+      titulo: 'Excluir dotação',
+      mensagem: 'Dotações com distribuições ativas não podem ser excluídas. Deseja excluir?',
+      confirmLabel: 'Excluir', confirmClass: 'btn-danger',
+      onConfirm: async function () {
+        try {
+          await excluirDotacao(id);
+          showToast('Dotação excluída.', 'success');
+          carregarTudo();
+        } catch (err) { showToast('Erro: '+(err.message||'verifique distribuições ativas.'),'error'); }
+      }
+    });
+  };
+
+  async function carregarRecebidos(exercicio) {
+    const el = document.getElementById('lista-recebidos');
+    try {
+      const dists = await listarDistribuicoes(perfil.campus_id, exercicio);
+      const minhas = dists.filter(d => d.unidade_destino_id === perfil.unidade_id);
+      if (minhas.length === 0) {
+        el.innerHTML = '<div class="empty-state"><p>Nenhum orçamento recebido para este exercício.</p></div>';
+      } else {
+        const total = minhas.reduce((s,d) => s+Number(d.valor), 0);
+        el.innerHTML = `<table><thead><tr>
+          <th>Categoria</th><th class="col-num">Valor recebido</th><th>Obs.</th>
+        </tr></thead><tbody>
+          ${minhas.map(d => `<tr>
+            <td>${d.dotacao ? d.dotacao.categoria : '—'}</td>
+            <td class="col-num">${formatMoeda(d.valor)}</td>
+            <td style="color:var(--cinza-medio)">${d.observacao||'—'}</td>
+          </tr>`).join('')}
+          <tr style="background:var(--azul-claro);font-weight:600">
+            <td>TOTAL</td><td class="col-num">${formatMoeda(total)}</td><td></td>
+          </tr>
+        </tbody></table>`;
+      }
+    } catch (err) { el.innerHTML = '<div class="alert alert-danger">Erro ao carregar.</div>'; }
+  }
+
+  carregarTudo();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login — PAC CPII</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page">
+
+<div class="login-box">
+  <div class="login-logo">
+    <!-- Substitua o src pelo caminho real do brasão do CPII -->
+    <div style="width:64px;height:64px;background:var(--azul);border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;font-weight:700">CP</div>
+  </div>
+  <h1>PAC — Colégio Pedro II</h1>
+  <p class="subtitle">Plano Anual de Contratações</p>
+
+  <div id="alerta-erro" class="alert alert-danger" style="display:none"></div>
+
+  <form id="form-login" novalidate>
+    <div class="form-group" style="margin-bottom:14px">
+      <label for="email">E-mail institucional</label>
+      <input type="email" id="email" placeholder="usuario@cp2.g12.br" autocomplete="email" required>
+      <span class="field-error" id="email-err" style="display:none"></span>
+    </div>
+
+    <div class="form-group" style="margin-bottom:20px">
+      <label for="senha">Senha</label>
+      <input type="password" id="senha" placeholder="Sua senha" autocomplete="current-password" required>
+      <span class="field-error" id="senha-err" style="display:none"></span>
+    </div>
+
+    <button type="submit" class="btn btn-primary" id="btn-entrar">Entrar</button>
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase.js"></script>
+<script src="ui.js"></script>
+<script>
+(async function () {
+  // Se já tem sessão válida, redirecionar
+  const session = await getSession();
+  if (session) {
+    const perfil = await getMeuPerfil();
+    if (perfil && perfil.ativo) {
+      location.href = perfil.primeiro_acesso
+        ? 'trocar-senha.html'
+        : (HOME_POR_PAPEL[perfil.papel] || 'dashboard.html');
+    }
+  }
+
+  // Erro via URL param
+  const params = new URLSearchParams(location.search);
+  if (params.get('erro') === 'inativo') {
+    document.getElementById('alerta-erro').textContent = 'Sua conta está inativa. Contate o administrador.';
+    document.getElementById('alerta-erro').style.display = '';
+  }
+
+  document.getElementById('form-login').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const email = document.getElementById('email').value.trim();
+    const senha = document.getElementById('senha').value;
+    const btn   = document.getElementById('btn-entrar');
+    const erro  = document.getElementById('alerta-erro');
+
+    // Validação básica
+    let ok = true;
+    if (!email) {
+      document.getElementById('email-err').textContent = 'Informe o e-mail.';
+      document.getElementById('email-err').style.display = '';
+      ok = false;
+    } else {
+      document.getElementById('email-err').style.display = 'none';
+    }
+    if (!senha) {
+      document.getElementById('senha-err').textContent = 'Informe a senha.';
+      document.getElementById('senha-err').style.display = '';
+      ok = false;
+    } else {
+      document.getElementById('senha-err').style.display = 'none';
+    }
+    if (!ok) return;
+
+    setLoading(btn, true);
+    erro.style.display = 'none';
+
+    try {
+      await signIn(email, senha);
+      const perfil = await getMeuPerfil();
+
+      if (!perfil || !perfil.ativo) {
+        await signOut();
+        erro.textContent = 'Conta inativa. Contate o administrador.';
+        erro.style.display = '';
+        setLoading(btn, false);
+        return;
+      }
+
+      location.href = perfil.primeiro_acesso
+        ? 'trocar-senha.html'
+        : (HOME_POR_PAPEL[perfil.papel] || 'dashboard.html');
+
+    } catch (err) {
+      setLoading(btn, false);
+      erro.textContent = 'E-mail ou senha incorretos.';
+      erro.style.display = '';
+    }
+  });
+})();
+</script>
+</body>
+</html>

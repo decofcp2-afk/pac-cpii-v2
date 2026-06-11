@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aprovações — PAC CPII</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header id="app-header">
+  <div class="header-left">
+    <button id="btn-menu-mobile">☰</button>
+    <div style="width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">CP</div>
+    <div class="header-title">PAC — Colégio Pedro II<small>Plano Anual de Contratações</small></div>
+  </div>
+  <div class="header-right">
+    <span class="campus-label" id="header-campus"></span>
+    <span id="header-nome"></span>
+    <button id="btn-logout">Sair</button>
+  </div>
+</header>
+<aside id="app-sidebar"><nav id="sidebar-nav"></nav></aside>
+
+<main id="app-main">
+  <div class="page-header">
+    <div><h1>Aprovações</h1><p id="subtitulo"></p></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <label style="font-size:13px;font-weight:500">Exercício:</label>
+      <select id="sel-exercicio"></select>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Demandas submetidas aguardando sua aprovação</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Objeto</th><th>Unidade</th><th>Enviada em</th>
+          <th class="col-num">Qtd</th><th class="col-num">Valor est.</th><th class="col-actions">Ações</th>
+        </tr></thead>
+        <tbody id="tbody-aprovacoes">
+          <tr><td colspan="6"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Painel de detalhes da demanda selecionada -->
+  <div id="painel-detalhe" class="card" style="display:none">
+    <div class="card-title">Detalhes da demanda</div>
+    <div id="detalhe-conteudo"></div>
+    <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end" id="detalhe-acoes"></div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase.js"></script>
+<script src="ui.js"></script>
+<script src="auth.js"></script>
+<script>
+(async function () {
+  const perfil = await initAuth(['chefia','ord_despesas','licitacoes']);
+  if (!perfil) return;
+  buildSidebar(perfil);
+  initUI();
+
+  const selEx = document.getElementById('sel-exercicio');
+  const anoAtual = new Date().getFullYear();
+  for (let a = anoAtual; a >= anoAtual-4; a--) {
+    const opt = document.createElement('option');
+    opt.value = a; opt.textContent = a;
+    if (a === anoAtual) opt.selected = true;
+    selEx.appendChild(opt);
+  }
+  selEx.addEventListener('change', carregarAprovacoes);
+
+  document.getElementById('subtitulo').textContent =
+    'Unidade: ' + (perfil.unidade ? perfil.unidade.nome : perfil.campus ? perfil.campus.nome : '');
+
+  async function carregarAprovacoes() {
+    const exercicio = parseInt(selEx.value);
+    const tbody = document.getElementById('tbody-aprovacoes');
+    tbody.innerHTML = '<tr><td colspan="6"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>';
+    document.getElementById('painel-detalhe').style.display = 'none';
+
+    try {
+      // Obter filhos diretos da unidade do usuário (RN12)
+      const filhos = await listarFilhosDiretos(perfil.unidade_id);
+      const idsFilhos = filhos.map(f => f.id);
+
+      if (idsFilhos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+          <div class="empty-icon">✅</div>
+          <h3>Nenhuma unidade subordinada</h3>
+          <p>Não há unidades diretamente subordinadas à sua.</p>
+        </div></td></tr>`;
+        return;
+      }
+
+      const demandas = await listarDemandasParaAprovacao(idsFilhos, exercicio);
+
+      if (demandas.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+          <div class="empty-icon">✅</div>
+          <h3>Nenhuma demanda pendente</h3>
+          <p>Todas as demandas das unidades subordinadas foram analisadas.</p>
+        </div></td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = demandas.map(d => `<tr>
+        <td><a href="#" onclick="verDetalhe('${d.id}');return false">${d.descricao_objeto.substring(0,60)}${d.descricao_objeto.length>60?'…':''}</a></td>
+        <td>${d.unidade ? d.unidade.sigla : '—'}</td>
+        <td>${formatData(d.criado_em)}</td>
+        <td class="col-num">${Number(d.quantidade).toLocaleString('pt-BR')} ${d.unidade_medida}</td>
+        <td class="col-num">${formatMoeda(d.valor_estimado)}</td>
+        <td class="col-actions">
+          <button class="btn btn-sm btn-secondary" onclick="verDetalhe('${d.id}')">Analisar</button>
+        </td>
+      </tr>`).join('');
+
+      window._demandas = demandas;
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="alert alert-danger">Erro: ${err.message}</div></td></tr>`;
+    }
+  }
+
+  window.verDetalhe = async function (id) {
+    const d = (window._demandas || []).find(x => x.id === id) || await getDemanda(id);
+    const painel = document.getElementById('painel-detalhe');
+    painel.style.display = '';
+
+    document.getElementById('detalhe-conteudo').innerHTML = `
+      <div class="form-grid form-grid-2" style="gap:12px">
+        <div><strong>Objeto:</strong><br>${d.descricao_objeto}</div>
+        <div><strong>Unidade:</strong><br>${d.unidade ? d.unidade.nome : '—'}</div>
+        <div style="grid-column:1/-1"><strong>Justificativa:</strong><br><em>${d.justificativa}</em></div>
+        <div><strong>Quantidade:</strong> ${Number(d.quantidade).toLocaleString('pt-BR')} ${d.unidade_medida}</div>
+        <div><strong>Valor estimado:</strong> ${formatMoeda(d.valor_estimado)}</div>
+        <div><strong>Possui contrato vigente:</strong> ${d.possui_contrato ? 'Sim' : 'Não'}</div>
+        ${d.possui_contrato ? `<div><strong>Risco não prorrogação:</strong> ${d.risco_nao_prorrogacao ? 'Sim' : 'Não'}</div>` : ''}
+        <div><strong>Demanda exclusiva ME/EPP:</strong> ${d.exclusiva ? 'Sim' : 'Não'}</div>
+        <div style="grid-column:1/-1">
+          <strong>Gestor Titular:</strong> ${d.gestor_titular_nome} — SIAPE ${d.gestor_titular_siape} — ${d.gestor_titular_email}<br>
+          <strong>Gestor Substituto:</strong> ${d.gestor_substituto_nome} — SIAPE ${d.gestor_substituto_siape} — ${d.gestor_substituto_email}<br>
+          <strong>Fiscal Titular:</strong> ${d.fiscal_titular_nome} — SIAPE ${d.fiscal_titular_siape} — ${d.fiscal_titular_email}<br>
+          <strong>Fiscal Substituto:</strong> ${d.fiscal_substituto_nome} — SIAPE ${d.fiscal_substituto_siape} — ${d.fiscal_substituto_email}
+        </div>
+      </div>`;
+
+    document.getElementById('detalhe-acoes').innerHTML = `
+      <button class="btn btn-danger" onclick="reprovar('${d.id}')">Reprovar</button>
+      <button class="btn btn-primary" onclick="darDeAcordo('${d.id}')">De acordo</button>`;
+
+    painel.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  window.darDeAcordo = function (id) {
+    showModal({
+      titulo: 'De acordo',
+      mensagem: 'Confirme com sua senha para aprovar esta demanda.',
+      confirmLabel: 'De acordo', confirmClass: 'btn-primary',
+      requireSenha: true,
+      onConfirm: async function ({ senha }) {
+        const ok = await verificarSenha(senha);
+        if (!ok) { showToast('Senha incorreta.', 'error'); return; }
+        try {
+          await aprovarDemanda(id, perfil.id);
+          showToast('Demanda aprovada.', 'success');
+          carregarAprovacoes();
+        } catch (err) { showToast('Erro: ' + err.message, 'error'); }
+      }
+    });
+  };
+
+  window.reprovar = function (id) {
+    showModal({
+      titulo: 'Reprovar demanda',
+      mensagem: 'Informe a justificativa da reprovação e confirme com sua senha.',
+      confirmLabel: 'Reprovar', confirmClass: 'btn-danger',
+      requireSenha: true, requireJustificativa: true,
+      onConfirm: async function ({ senha, justificativa }) {
+        const ok = await verificarSenha(senha);
+        if (!ok) { showToast('Senha incorreta.', 'error'); return; }
+        try {
+          await reprovarDemanda(id, perfil.id, justificativa);
+          showToast('Demanda reprovada.', 'success');
+          carregarAprovacoes();
+        } catch (err) { showToast('Erro: ' + err.message, 'error'); }
+      }
+    });
+  };
+
+  carregarAprovacoes();
+})();
+</script>
+</body>
+</html>
