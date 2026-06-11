@@ -80,7 +80,6 @@ async function listarUnidadesDoCampus(campusId) {
     .from('unidades')
     .select('*, parent:unidades!parent_id(id,nome,sigla)')
     .eq('campus_id', campusId)
-    .eq('ativo', true)
     .order('nome'));
 }
 
@@ -98,7 +97,6 @@ async function listarFilhosDiretos(parentId) {
     .from('unidades')
     .select('*')
     .eq('parent_id', parentId)
-    .eq('ativo', true)
     .order('nome'));
 }
 
@@ -143,10 +141,10 @@ async function atualizarUsuario(id, dados) {
 async function listarDotacoes(campusId, exercicio) {
   let q = db
     .from('dotacoes')
-    .select('*, unidade:unidades(id,nome,sigla)')
+    .select('*')
     .eq('campus_id', campusId);
   if (exercicio) q = q.eq('exercicio', exercicio);
-  return _check(await q.order('categoria'));
+  return _check(await q.order('criado_em', { ascending: false }));
 }
 
 async function criarDotacao(dados) {
@@ -161,12 +159,12 @@ async function excluirDotacao(id) {
   return _check(await db.from('dotacoes').delete().eq('id', id));
 }
 
-/* ── Distribuições ─────────────────────────────────────────── */
+/* ── Distribuições ────────────────────────────────────────── */
 async function listarDistribuicoes(campusId, exercicio) {
+  // campus_id não existe em distribuicoes — RLS já filtra pelo campus via dotacoes
   return _check(await db
     .from('distribuicoes')
-    .select('*, dotacao:dotacoes(id,categoria,valor_total,unidade_id), destino:unidades!unidade_destino_id(id,nome,sigla)')
-    .eq('campus_id', campusId)
+    .select('*, dotacao:dotacoes(id,descricao,valor_total), unidade:unidades!unidade_id(id,nome,sigla)')
     .order('criado_em', { ascending: false }));
 }
 
@@ -254,12 +252,12 @@ async function excluirDemanda(id) {
 /* ── Aprovações / histórico ────────────────────────────────── */
 async function registrarAprovacao(dados) {
   // dados: { demanda_id, usuario_id, acao, justificativa? }
-  return _check(await db.from('aprovacoes').insert(dados).select().single());
+  return _check(await db.from('historico_demandas').insert(dados).select().single());
 }
 
 async function listarHistorico(demandaId) {
   return _check(await db
-    .from('aprovacoes')
+    .from('historico_demandas')
     .select('*, usuario:usuarios(id,nome,papel)')
     .eq('demanda_id', demandaId)
     .order('criado_em'));
@@ -270,13 +268,13 @@ async function listarHistorico(demandaId) {
 /* Enviar demanda (rascunho → submetida) */
 async function enviarDemanda(demandaId, usuarioId) {
   await atualizarDemanda(demandaId, { status: 'submetida' });
-  await registrarAprovacao({ demanda_id: demandaId, usuario_id: usuarioId, acao: 'submissao' });
+  await registrarAprovacao({ demanda_id: demandaId, usuario_id: usuarioId, acao: 'envio' });
 }
 
 /* Aprovar demanda (submetida → de_acordo) */
 async function aprovarDemanda(demandaId, usuarioId) {
   await atualizarDemanda(demandaId, { status: 'de_acordo' });
-  await registrarAprovacao({ demanda_id: demandaId, usuario_id: usuarioId, acao: 'de_acordo' });
+  await registrarAprovacao({ demanda_id: demandaId, usuario_id: usuarioId, acao: 'aprovacao' });
 }
 
 /* Reprovar demanda (submetida → reprovada) */
@@ -310,6 +308,17 @@ async function reverterDemanda(demandaId, novoStatus, usuarioId, justificativa) 
 /* ── Painel público ────────────────────────────────────────── */
 async function listarCampiPublico() {
   return _check(await db.from('campi').select('id,nome,sigla').order('nome'));
+}
+
+/* Conta unidades por campus (para admin) */
+async function contarUnidadesPorCampus() {
+  const { data, error } = await db.from('unidades').select('campus_id');
+  if (error) throw error;
+  const counts = {};
+  data.forEach(function (u) {
+    counts[u.campus_id] = (counts[u.campus_id] || 0) + 1;
+  });
+  return counts;
 }
 
 async function listarExerciciosPublicos(campusId) {
