@@ -25,14 +25,39 @@
       <span class="field-error" id="email-err" style="display:none"></span>
     </div>
 
-    <div class="form-group" style="margin-bottom:20px">
+    <div class="form-group" style="margin-bottom:8px">
       <label for="senha">Senha</label>
-      <input type="password" id="senha" placeholder="Sua senha" autocomplete="current-password" required>
+      <div style="position:relative">
+        <input type="password" id="senha" placeholder="Sua senha" autocomplete="current-password" required style="padding-right:44px">
+        <button type="button" id="btn-toggle-senha" title="Mostrar/ocultar senha"
+          style="position:absolute;right:0;top:0;bottom:0;width:40px;background:none;border:none;cursor:pointer;color:var(--cinza-medio);display:flex;align-items:center;justify-content:center;font-size:18px">
+          👁
+        </button>
+      </div>
       <span class="field-error" id="senha-err" style="display:none"></span>
+    </div>
+
+    <div style="text-align:right;margin-bottom:20px">
+      <a href="#" id="link-esqueci" style="font-size:13px;color:var(--azul);text-decoration:none">Esqueci minha senha</a>
     </div>
 
     <button type="submit" class="btn btn-primary" id="btn-entrar">Entrar</button>
   </form>
+</div>
+
+<!-- Modal: Esqueci minha senha -->
+<div id="modal-recuperar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:10px;padding:32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+    <h3 style="margin:0 0 8px;font-size:18px;color:var(--azul)">Recuperar senha</h3>
+    <p style="margin:0 0 20px;font-size:14px;color:#666">Informe seu e-mail institucional. Se ele estiver cadastrado, você receberá um link para redefinir a senha.</p>
+    <div id="modal-msg" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:6px;font-size:14px"></div>
+    <input type="email" id="email-recuperar" placeholder="seu@email.gov.br"
+      style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;box-sizing:border-box;margin-bottom:16px">
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button type="button" id="btn-cancelar-recuperar" class="btn" style="background:#f5f5f5;color:#555">Cancelar</button>
+      <button type="button" id="btn-enviar-recuperar" class="btn btn-primary">Enviar link</button>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -104,10 +129,70 @@
 
     } catch (err) {
       setLoading(btn, false);
-      erro.textContent = 'E-mail ou senha incorretos.';
+      // Mensagem específica por tipo de erro
+      if (err.message && err.message.toLowerCase().includes('invalid login')) {
+        erro.textContent = 'E-mail ou senha incorretos.';
+      } else if (err.message && err.message.toLowerCase().includes('email not confirmed')) {
+        erro.textContent = 'E-mail ainda não confirmado. Contate o administrador.';
+      } else if (err.message && (err.message.includes('fetch') || err.message.includes('network'))) {
+        erro.textContent = 'Sem conexão com o servidor. Verifique sua internet e tente novamente.';
+      } else {
+        erro.textContent = err.message || 'Erro ao entrar. Tente novamente.';
+      }
       erro.style.display = '';
     }
   });
+
+  // Mostrar/ocultar senha
+  document.getElementById('btn-toggle-senha').addEventListener('click', function () {
+    const input = document.getElementById('senha');
+    const isHidden = input.type === 'password';
+    input.type = isHidden ? 'text' : 'password';
+    this.textContent = isHidden ? '🙈' : '👁';
+  });
+
+  // Abrir/fechar modal de recuperação
+  document.getElementById('link-esqueci').addEventListener('click', function (e) {
+    e.preventDefault();
+    const modal = document.getElementById('modal-recuperar');
+    modal.style.display = 'flex';
+    document.getElementById('email-recuperar').value = document.getElementById('email').value;
+    document.getElementById('modal-msg').style.display = 'none';
+  });
+
+  document.getElementById('btn-cancelar-recuperar').addEventListener('click', function () {
+    document.getElementById('modal-recuperar').style.display = 'none';
+  });
+
+  document.getElementById('modal-recuperar').addEventListener('click', function (e) {
+    if (e.target === this) this.style.display = 'none';
+  });
+
+  document.getElementById('btn-enviar-recuperar').addEventListener('click', async function () {
+    const emailRec = document.getElementById('email-recuperar').value.trim();
+    const msg = document.getElementById('modal-msg');
+    if (!emailRec) {
+      msg.style.cssText = 'display:block;background:#fff3cd;color:#856404;padding:10px 14px;border-radius:6px;font-size:14px;margin-bottom:12px';
+      msg.textContent = 'Informe o e-mail.';
+      return;
+    }
+    this.disabled = true;
+    this.textContent = 'Enviando…';
+    try {
+      // Configurar a URL de redirecionamento para a página de troca de senha
+      const redirectTo = location.origin + location.pathname.replace('login.html', 'trocar-senha.html');
+      const { error } = await db.auth.resetPasswordForEmail(emailRec, { redirectTo });
+      if (error) throw error;
+      msg.style.cssText = 'display:block;background:#d4edda;color:#155724;padding:10px 14px;border-radius:6px;font-size:14px;margin-bottom:12px';
+      msg.textContent = 'Link enviado! Verifique sua caixa de entrada.';
+    } catch (err) {
+      msg.style.cssText = 'display:block;background:#f8d7da;color:#721c24;padding:10px 14px;border-radius:6px;font-size:14px;margin-bottom:12px';
+      msg.textContent = err.message || 'Erro ao enviar. Tente novamente.';
+    }
+    this.disabled = false;
+    this.textContent = 'Enviar link';
+  });
+
 })();
 </script>
 </body>
