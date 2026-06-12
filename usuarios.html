@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Usuários — PAC CPII</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=22">
 </head>
 <body>
 
@@ -103,9 +103,9 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase.js"></script>
-<script src="ui.js"></script>
-<script src="auth.js"></script>
+<script src="supabase.js?v=22"></script>
+<script src="ui.js?v=22"></script>
+<script src="auth.js?v=22"></script>
 <script>
 const PAPEL_LABELS = {
   administrador: 'Administrador', ord_despesas: 'Ordenador',
@@ -253,29 +253,4 @@ const PAPEL_LABELS = {
         if (sessaoAtual) {
           await db.auth.setSession({
             access_token:  sessaoAtual.access_token,
-            refresh_token: sessaoAtual.refresh_token
-          });
-        }
-
-        // Criar perfil na tabela usuarios
-        await criarUsuarioNoBanco({
-          id: novoId, campus_id: perfil.campus_id,
-          unidade_id: unidade, nome, papel, ativo: true, primeiro_acesso: true
-        });
-        showToast('Usuário criado. Ele poderá fazer login com a senha definida.', 'success');
-      }
-      document.getElementById('view-lista').style.display = '';
-      document.getElementById('view-form').style.display = 'none';
-      carregarUsuarios();
-    } catch (err) {
-      showToast('Erro ao salvar: ' + err.message, 'error');
-    } finally {
-      setLoading(this, false);
-    }
-  });
-
-  carregarUsuarios();
-})();
-</script>
-</body>
-</html>
+            refres

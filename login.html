@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Login — PAC CPII</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=22">
 </head>
 <body class="login-page">
 
@@ -61,9 +61,9 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase.js"></script>
-<script src="ui.js"></script>
-<script src="auth.js"></script>
+<script src="supabase.js?v=22"></script>
+<script src="ui.js?v=22"></script>
+<script src="auth.js?v=22"></script>
 <script>
 (async function () {
   // Se já tem sessão válida, redirecionar
@@ -79,122 +79,4 @@
 
   // Erro via URL param
   const params = new URLSearchParams(location.search);
-  if (params.get('erro') === 'inativo') {
-    document.getElementById('alerta-erro').textContent = 'Sua conta está inativa. Contate o administrador.';
-    document.getElementById('alerta-erro').style.display = '';
-  }
-
-  document.getElementById('form-login').addEventListener('submit', async function (e) {
-    e.preventDefault();
-    const email = document.getElementById('email').value.trim();
-    const senha = document.getElementById('senha').value;
-    const btn   = document.getElementById('btn-entrar');
-    const erro  = document.getElementById('alerta-erro');
-
-    // Validação básica
-    let ok = true;
-    if (!email) {
-      document.getElementById('email-err').textContent = 'Informe o e-mail.';
-      document.getElementById('email-err').style.display = '';
-      ok = false;
-    } else {
-      document.getElementById('email-err').style.display = 'none';
-    }
-    if (!senha) {
-      document.getElementById('senha-err').textContent = 'Informe a senha.';
-      document.getElementById('senha-err').style.display = '';
-      ok = false;
-    } else {
-      document.getElementById('senha-err').style.display = 'none';
-    }
-    if (!ok) return;
-
-    setLoading(btn, true);
-    erro.style.display = 'none';
-
-    try {
-      await signIn(email, senha);
-      const perfil = await getMeuPerfil();
-
-      if (!perfil || !perfil.ativo) {
-        await signOut();
-        erro.textContent = 'Conta inativa. Contate o administrador.';
-        erro.style.display = '';
-        setLoading(btn, false);
-        return;
-      }
-
-      location.href = perfil.primeiro_acesso
-        ? 'trocar-senha.html'
-        : (HOME_POR_PAPEL[perfil.papel] || 'dashboard.html');
-
-    } catch (err) {
-      setLoading(btn, false);
-      // Mensagem específica por tipo de erro
-      if (err.message && err.message.toLowerCase().includes('invalid login')) {
-        erro.textContent = 'E-mail ou senha incorretos.';
-      } else if (err.message && err.message.toLowerCase().includes('email not confirmed')) {
-        erro.textContent = 'E-mail ainda não confirmado. Contate o administrador.';
-      } else if (err.message && (err.message.includes('fetch') || err.message.includes('network'))) {
-        erro.textContent = 'Sem conexão com o servidor. Verifique sua internet e tente novamente.';
-      } else {
-        erro.textContent = err.message || 'Erro ao entrar. Tente novamente.';
-      }
-      erro.style.display = '';
-    }
-  });
-
-  // Mostrar/ocultar senha
-  document.getElementById('btn-toggle-senha').addEventListener('click', function () {
-    const input = document.getElementById('senha');
-    const isHidden = input.type === 'password';
-    input.type = isHidden ? 'text' : 'password';
-    this.textContent = isHidden ? '🙈' : '👁';
-  });
-
-  // Abrir/fechar modal de recuperação
-  document.getElementById('link-esqueci').addEventListener('click', function (e) {
-    e.preventDefault();
-    const modal = document.getElementById('modal-recuperar');
-    modal.style.display = 'flex';
-    document.getElementById('email-recuperar').value = document.getElementById('email').value;
-    document.getElementById('modal-msg').style.display = 'none';
-  });
-
-  document.getElementById('btn-cancelar-recuperar').addEventListener('click', function () {
-    document.getElementById('modal-recuperar').style.display = 'none';
-  });
-
-  document.getElementById('modal-recuperar').addEventListener('click', function (e) {
-    if (e.target === this) this.style.display = 'none';
-  });
-
-  document.getElementById('btn-enviar-recuperar').addEventListener('click', async function () {
-    const emailRec = document.getElementById('email-recuperar').value.trim();
-    const msg = document.getElementById('modal-msg');
-    if (!emailRec) {
-      msg.style.cssText = 'display:block;background:#fff3cd;color:#856404;padding:10px 14px;border-radius:6px;font-size:14px;margin-bottom:12px';
-      msg.textContent = 'Informe o e-mail.';
-      return;
-    }
-    this.disabled = true;
-    this.textContent = 'Enviando…';
-    try {
-      // Configurar a URL de redirecionamento para a página de troca de senha
-      const redirectTo = location.origin + location.pathname.replace('login.html', 'trocar-senha.html');
-      const { error } = await db.auth.resetPasswordForEmail(emailRec, { redirectTo });
-      if (error) throw error;
-      msg.style.cssText = 'display:block;background:#d4edda;color:#155724;padding:10px 14px;border-radius:6px;font-size:14px;margin-bottom:12px';
-      msg.textContent = 'Link enviado! Verifique sua caixa de entrada.';
-    } catch (err) {
-      msg.style.cssText = 'display:block;background:#f8d7da;color:#721c24;padding:10px 14px;border-radius:6px;font-size:14px;margin-bottom:12px';
-      msg.textContent = err.message || 'Erro ao enviar. Tente novamente.';
-    }
-    this.disabled = false;
-    this.textContent = 'Enviar link';
-  });
-
-})();
-</script>
-</body>
-</html>
+  if (pa
