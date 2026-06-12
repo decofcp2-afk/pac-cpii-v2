@@ -17,6 +17,20 @@ const PAGINAS_PUBLICAS = ['login.html', 'publico.html', 'index.html', ''];
 
 let _perfil = null; // cache do perfil na sessão
 
+/* ── Aguardar sessão inicial do Supabase ───────────────────── */
+// onAuthStateChange com INITIAL_SESSION é garantido pelo Supabase v2
+// para disparar mesmo para assinantes tardios, eliminando race conditions.
+function _aguardarSessaoInicial() {
+  return new Promise(function (resolve) {
+    var sub = db.auth.onAuthStateChange(function (event, session) {
+      if (event === 'INITIAL_SESSION') {
+        sub.data.subscription.unsubscribe();
+        resolve(session);
+      }
+    });
+  });
+}
+
 /* ── Inicializar autenticação ──────────────────────────────── */
 async function initAuth(papeis) {
   // papeis: array de papéis permitidos na página (undefined = qualquer logado)
@@ -25,8 +39,17 @@ async function initAuth(papeis) {
   // Páginas públicas: não verificar
   if (PAGINAS_PUBLICAS.includes(page)) return null;
 
-  // Usar getUser() (servidor) em vez de getSession() (local storage),
-  // pois getSession() pode retornar null antes de o token ser restaurado.
+  // Aguardar Supabase restaurar sessão do localStorage (INITIAL_SESSION).
+  // Isso resolve o race condition entre a inicialização do auth client
+  // e a execução da IIFE da página no carregamento.
+  const sessao = await _aguardarSessaoInicial();
+
+  if (!sessao) {
+    location.href = 'login.html';
+    return null;
+  }
+
+  // Com sessão válida, buscar perfil completo do banco
   try {
     _perfil = await getMeuPerfil();
   } catch (e) {
@@ -39,7 +62,7 @@ async function initAuth(papeis) {
     return null;
   }
 
-  if (!_perfil || !_perfil.ativo) {
+  if (!_perfil.ativo) {
     await signOut();
     location.href = 'login.html?erro=inativo';
     return null;
