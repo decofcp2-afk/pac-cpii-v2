@@ -111,53 +111,118 @@
     try {
       let demandas;
       if (papel === 'chefia') {
+        // Chefia vÃª demandas submetidas do seu campus (campus_id, nÃ£o unidade_id)
         demandas = await listarDemandasDoCampus(perfil.campus_id, exercicio, 'submetida');
       } else if (papel === 'ord_despesas') {
+        // Ord. despesas vÃª demandas jÃ¡ aprovadas (de_acordo) do seu campus
         demandas = await listarDemandasDoCampus(perfil.campus_id, exercicio, 'de_acordo');
       } else {
+        // LicitaÃ§Ãµes vÃª todas as demandas de_acordo (todos os campi)
         demandas = await listarTodasDemandas(exercicio, 'de_acordo');
       }
+
       if (!demandas || demandas.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><h3>Nada pendente</h3></div></td></tr>';
+        var msgMap = {
+          chefia: 'Nenhuma demanda submetida pendente de aprovaÃ§Ã£o.',
+          ord_despesas: 'Nenhuma demanda aprovada aguardando priorizaÃ§Ã£o.',
+          licitacoes: 'Nenhuma demanda aprovada no momento.'
+        };
+        tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">' +
+          '<div class="empty-icon">â</div>' +
+          '<h3>Nada pendente</h3>' +
+          '<p>' + (msgMap[papel] || 'Sem demandas.') + '</p>' +
+          '</div></td></tr>';
         return;
       }
-      tbody.innerHTML = demandas.map(function(d) {
-        return '<tr><td><a href="#" onclick="verDetalhe(\''+d.id+'\');return false">'+d.descricao_objeto.substring(0,60)+'</a></td></tr>';
+
+      tbody.innerHTML = demandas.map(function (d) {
+        var unidade = d.unidade ? d.unidade.sigla : (d.campus ? d.campus.sigla : 'â');
+        return '<tr>' +
+          '<td><a href="#" onclick="verDetalhe(\'' + d.id + '\');return false">' +
+            d.descricao_objeto.substring(0,60) + (d.descricao_objeto.length > 60 ? 'â¦' : '') +
+          '</a></td>' +
+          '<td>' + unidade + '</td>' +
+          '<td>' + formatData(d.criado_em) + '</td>' +
+          '<td class="col-num">' + Number(d.quantidade).toLocaleString('pt-BR') + ' ' + d.unidade_medida + '</td>' +
+          '<td class="col-num">' + formatMoeda(d.valor_estimado) + '</td>' +
+          '<td class="col-actions">' +
+            '<button class="btn btn-sm btn-secondary" onclick="verDetalhe(\'' + d.id + '\')">Analisar</button>' +
+          '</td>' +
+        '</tr>';
       }).join('');
+
       window._demandas = demandas;
     } catch (err) {
-      tbody.innerHTML = '<tr><td colspan="6">Erro: ' + err.message + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6"><div class="alert alert-danger">Erro: ' + err.message + '</div></td></tr>';
     }
   }
 
-  window.verDetalhe = async function(id) {
-    var d = (window._demandas || []).find(function(x) { return x.id === id; }) || await getDemanda(id);
+  window.verDetalhe = async function (id) {
+    var d = (window._demandas || []).find(function (x) { return x.id === id; }) || await getDemanda(id);
     var painel = document.getElementById('painel-detalhe');
     painel.style.display = '';
-    document.getElementById('detalhe-conteudo').innerHTML = '<p><strong>'+d.descricao_objeto+'</strong></p>';
-    var bt = '<button class="btn btn-danger" onclick="reprovar(\''+i.id+'\')">Reprovar</button>';
-    if (papel === 'chefia') bt += ' <button class="btn btn-primary" onclick="aprovar(\''+i.id+'\')">Aprovar</button>';
-    else if (papel === 'ord_despesas') bt += ' <button class="btn btn-primary" onclick="aprovar(\''+i.id+'\')">Encaminhar</button>';
-    else if (papel === 'licitacoes') bt += ' <button class="btn btn-secondary" onclick="reverterStatus(\''+i.id+'\',\'de_acordo\')">Reverter</button>';
-    document.getElementById('detalhe-acoes').innerHTML = bt;
-    painel.scrollIntoView({behavior:'smooth',block:'nearest'});
+
+    document.getElementById('detalhe-conteudo').innerHTML =
+      '<div class="form-grid form-grid-2" style="gap:12px">' +
+        '<div><strong>Objeto:</strong><br>' + d.descricao_objeto + '</div>' +
+        '<div><strong>Unidade:</strong><br>' + (d.unidade ? d.unidade.nome : (d.campus ? d.campus.nome : 'â')) + '</div>' +
+        '<div style="grid-column:1/-1"><strong>Justificativa:</strong><br><em>' + d.justificativa + '</em></div>' +
+        '<div><strong>Quantidade:</strong> ' + Number(d.quantidade).toLocaleString('pt-BR') + ' ' + d.unidade_medida + '</div>' +
+        '<div><strong>Valor estimado:</strong> ' + formatMoeda(d.valor_estimado) + '</div>' +
+        '<div><strong>Possui contrato vigente:</strong> ' + (d.possui_contrato ? 'Sim' : 'NÃ£o') + '</div>' +
+        (d.possui_contrato ? '<div><strong>Risco nÃ£o prorrogaÃ§Ã£o:</strong> ' + (d.risco_nao_prorrogacao ? 'Sim' : 'NÃ£o') + '</div>' : '') +
+        '<div><strong>Demanda exclusiva ME/EPP:</strong> ' + (d.exclusiva ? 'Sim' : 'NÃ£o') + '</div>' +
+        '<div style="grid-column:1/-1">' +
+          '<strong>Gestor Titular:</strong> ' + d.gestor_titular_nome + ' â SIAPE ' + d.gestor_titular_siape + ' â ' + d.gestor_titular_email + '<br>' +
+          '<strong>Gestor Substituto:</strong> ' + d.gestor_substituto_nome + ' â SIAPE ' + d.gestor_substituto_siape + ' â ' + d.gestor_substituto_email + '<br>' +
+          '<strong>Fiscal Substituto:</strong> ' + d.fiscal_substituto_nome + ' â SIAPE ' + d.fiscal_substituto_siape + ' â ' + d.fiscal_substituto_email +
+        '</div>' +
+      '</div>';
+
+    var botoesHtml = '<button class="btn btn-danger" onclick="reprovar(\'' + d.id + '\')">Reprovar</button>';
+    if (papel === 'chefia') {
+      botoesHtml += ' <button class="btn btn-primary" onclick="aprovar(\'' + d.id + '\')">Aprovar (de acordo)</button>';
+    } else if (papel === 'ord_despesas') {
+      botoesHtml += ' <button class="btn btn-primary" onclick="aprovar(\'' + d.id + '\')">Encaminhar LicitaÃ§Ãµes</button>';
+    } else if (papel === 'licitacoes') {
+      botoesHtml += ' <button class="btn btn-secondary" onclick="reverterStatus(\'' + d.id + '\', \'de_acordo\')">Reverter</button>';
+    }
+    document.getElementById('detalhe-acoes').innerHTML = botoesHtml;
+    painel.scrollIntoView({behavior:'smooth', block:'nearest'});
   };
+
   window.reprovar = async function(id) {
     var just = prompt('Motivo da reprovaÃ§Ã£o:');
     if (just === null) return;
-    try { await reprovarDemanda(id,getPerfil().id,just.trim()); showToast('Reprovada.','success'); document.getElementById('painel-detalhe').style.display='none'; carregarAprovacoes(); }
-    catch(e) { showToast('Erro: '+e.message,'error'); }
+    if (!just.trim()) { showToast('Informe o motivo.','error'); return; }
+    try {
+      await reprovarDemanda(id, getPerfil().id, just.trim());
+      showToast('Demanda reprovada.','success');
+      document.getElementById('painel-detalhe').style.display='none';
+      carregarAprovacoes();
+    } catch(e) { showToast('Erro: '+e.message,'error'); }
   };
+
   window.aprovar = async function(id) {
-    try { await aprovarDemanda(id,getPerfil().id); showToast('Aprovado.','success'); document.getElementById('painel-detalhe').style.display='none'; carregarAprovacoes(); }
-    catch(e) { showToast('Erro: '+e.message,'error'); }
+    try {
+      await aprovarDemanda(id, getPerfil().id);
+      showToast(papel==='chefia'?'Aprovado (de acordo).':'Encaminhado para LicitaÃ§Ãµes.','success');
+      document.getElementById('painel-detalhe').style.display='none';
+      carregarAprovacoes();
+    } catch(e) { showToast('Erro: '+e.message,'error'); }
   };
-  window.reverterStatus = async function(id,novoStatus) {
-    var just = prompt('Justificativa:');
+
+  window.reverterStatus = async function(id, novoStatus) {
+    var just = prompt('Justificativa para reversÃ£o:');
     if (just === null) return;
-    try { await reverterDemanda(id,novoStatus,getPerfil().id,just.trim()); showToast('Revertido.','success'); document.getElementById('painel-detalhe').style.display='none'; carregarAprovacoes(); }
-    catch(e) { showToast('Erro: '+e.message,'error'); }
+    try {
+      await reverterDemanda(id, novoStatus, getPerfil().id, just.trim());
+      showToast('Status revertido.','success');
+      document.getElementById('painel-detalhe').style.display='none';
+      carregarAprovacoes();
+    } catch(e) { showToast('Erro: '+e.message,'error'); }
   };
+
   carregarAprovacoes();
 })();
 </script>
