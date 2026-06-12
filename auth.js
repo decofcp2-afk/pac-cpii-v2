@@ -22,12 +22,21 @@ let _perfil = null; // cache do perfil na sessão
 // para disparar mesmo para assinantes tardios, eliminando race conditions.
 function _aguardarSessaoInicial() {
   return new Promise(function (resolve) {
+    console.log('[auth] aguardando INITIAL_SESSION...');
     var sub = db.auth.onAuthStateChange(function (event, session) {
+      console.log('[auth] evento:', event, 'sessao:', session ? 'presente' : 'null');
       if (event === 'INITIAL_SESSION') {
-        sub.data.subscription.unsubscribe();
+        console.log('[auth] INITIAL_SESSION recebido, resolvendo promise');
         resolve(session);
+        // Unsubscribe adiado para evitar race condition se evento for síncrono
+        setTimeout(function() {
+          if (sub && sub.data && sub.data.subscription) {
+            sub.data.subscription.unsubscribe();
+          }
+        }, 0);
       }
     });
+    console.log('[auth] subscriber registrado');
   });
 }
 
@@ -35,29 +44,39 @@ function _aguardarSessaoInicial() {
 async function initAuth(papeis) {
   // papeis: array de papéis permitidos na página (undefined = qualquer logado)
   const page = location.pathname.split('/').pop() || 'index.html';
+  console.log('[auth] initAuth chamado, page:', page);
 
   // Páginas públicas: não verificar
-  if (PAGINAS_PUBLICAS.includes(page)) return null;
+  if (PAGINAS_PUBLICAS.includes(page)) {
+    console.log('[auth] página pública, retornando null');
+    return null;
+  }
 
   // Aguardar Supabase restaurar sessão do localStorage (INITIAL_SESSION).
   // Isso resolve o race condition entre a inicialização do auth client
   // e a execução da IIFE da página no carregamento.
   const sessao = await _aguardarSessaoInicial();
+  console.log('[auth] sessão após INITIAL_SESSION:', sessao ? 'presente' : 'null');
 
   if (!sessao) {
+    console.log('[auth] sem sessão, redirecionando para login');
     location.href = 'login.html';
     return null;
   }
 
   // Com sessão válida, buscar perfil completo do banco
   try {
+    console.log('[auth] buscando perfil...');
     _perfil = await getMeuPerfil();
+    console.log('[auth] perfil:', _perfil ? _perfil.papel : 'null');
   } catch (e) {
+    console.log('[auth] erro ao buscar perfil:', e.message);
     location.href = 'login.html';
     return null;
   }
 
   if (!_perfil) {
+    console.log('[auth] perfil null, redirecionando');
     location.href = 'login.html';
     return null;
   }
@@ -76,11 +95,13 @@ async function initAuth(papeis) {
 
   // Verificar papel permitido
   if (papeis && !papeis.includes(_perfil.papel)) {
+    console.log('[auth] papel não permitido:', _perfil.papel, 'esperado:', papeis);
     location.href = HOME_POR_PAPEL[_perfil.papel] || 'login.html';
     return null;
   }
 
   // Preencher header
+  console.log('[auth] preenchendo header e retornando perfil');
   preencherHeader(_perfil);
 
   return _perfil;
