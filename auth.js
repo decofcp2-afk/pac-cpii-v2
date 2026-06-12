@@ -25,16 +25,16 @@ async function initAuth(papeis) {
   // Páginas públicas: não verificar
   if (PAGINAS_PUBLICAS.includes(page)) return null;
 
-  const session = await getSession();
-  if (!session) {
+  // Usar getUser() (servidor) em vez de getSession() (local storage),
+  // pois getSession() pode retornar null antes de o token ser restaurado.
+  try {
+    _perfil = await getMeuPerfil();
+  } catch (e) {
     location.href = 'login.html';
     return null;
   }
 
-  try {
-    _perfil = await getMeuPerfil();
-  } catch (e) {
-    await signOut();
+  if (!_perfil) {
     location.href = 'login.html';
     return null;
   }
