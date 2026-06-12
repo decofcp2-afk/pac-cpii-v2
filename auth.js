@@ -1,6 +1,6 @@
 /* ============================================================
-   PAC CPII v2 — auth.js v2
-   Sessão, guards por papel, redirecionamentos
+   PAC CPII v2 — auth.js (final)
+   Aguarda _sessaoPromise → getSession() → busca perfil via fetch
    ============================================================ */
 
 const HOME_POR_PAPEL = {
@@ -20,44 +20,28 @@ async function initAuth(papeis) {
   const page = location.pathname.split('/').pop() || 'index.html';
   if (PAGINAS_PUBLICAS.includes(page)) return null;
 
-  let accessToken = null;
-  let userId = null;
+  // Passo 1: aguardar a inicialização do cliente Supabase.
+  // Sem esse await, db.auth.getSession() trava indefinidamente
+  // enquanto o cliente processa o _initializePromise interno.
+  if (window._sessaoPromise) await window._sessaoPromise;
 
-  // Estratégia 1: usar sessão do _sessaoPromise diretamente.
-  // O cliente Supabase pode renovar o token expirado internamente e retornar
-  // a sessão atualizada via INITIAL_SESSION — sem depender do localStorage,
-  // que pode ter token vencido até a escrita ser concluída.
-  if (window._sessaoPromise) {
-    try {
-      var session = await window._sessaoPromise;
-      if (session && session.access_token) {
-        accessToken = session.access_token;
-        userId = session.user && session.user.id;
-      }
-    } catch (e) { /* ignora */ }
-  }
-
-  // Estratégia 2: fallback para localStorage (quando _sessaoPromise não está disponível)
-  if (!accessToken) {
-    try {
-      var lsKey = 'sb-' + SUPABASE_URL.match(/\/\/([^.]+)\./)[1] + '-auth-token';
-      var lsRaw = localStorage.getItem(lsKey);
-      if (lsRaw) {
-        var lsData = JSON.parse(lsRaw);
-        var agora = Math.floor(Date.now() / 1000);
-        if (lsData && lsData.access_token && lsData.expires_at > agora) {
-          accessToken = lsData.access_token;
-          userId = lsData.user && lsData.user.id;
-        }
-      }
-    } catch (e) { /* ignora */ }
-  }
+  // Passo 2: obter a sessão atual (com token renovado automaticamente).
+  let accessToken = null, userId = null;
+  try {
+    var gsResult = await db.auth.getSession();
+    var session = gsResult && gsResult.data && gsResult.data.session;
+    if (session && session.access_token) {
+      accessToken = session.access_token;
+      userId = session.user && session.user.id;
+    }
+  } catch (e) { /* ignora */ }
 
   if (!accessToken || !userId) {
     location.href = 'login.html';
     return null;
   }
 
+  // Passo 3: buscar perfil completo via fetch (sem passar pelo cliente auth).
   try {
     var resp = await fetch(
       SUPABASE_URL + '/rest/v1/usuarios?select=*,campus:campi(*),unidade:unidades(*)&id=eq.' + userId,
@@ -127,6 +111,7 @@ async function verificarSenha(senha) {
   } catch { return false; }
 }
 
+/* ── Construir sidebar ─────────────────────────────────────── */
 function buildSidebar(perfil) {
   const nav = document.getElementById('sidebar-nav');
   if (!nav) return;
@@ -163,4 +148,4 @@ function buildSidebar(perfil) {
 
   nav.innerHTML = html;
   highlightActiveNav();
-         }
+   }
