@@ -25,24 +25,48 @@ async function initAuth(papeis) {
   // Páginas públicas: não verificar
   if (PAGINAS_PUBLICAS.includes(page)) return null;
 
-  // Aguardar Supabase concluir a inicialização do auth client.
-  // window._sessaoPromise é configurada em supabase.js (antes desta IIFE)
-  // e resolve com a sessão assim que o evento INITIAL_SESSION dispara.
-  const sessao = await window._sessaoPromise;
+  // ── Estratégia: leitura direta do localStorage ──────────────
+  // O auth client do Supabase v2 inicializa de forma assíncrona;
+  // qualquer chamada a db.auth.getSession() / getUser() durante
+  // a inicialização bloqueia indefinidamente (aguarda _initializePromise).
+  // Para evitar isso, lemos o token direto do localStorage e fazemos
+  // a requisição de perfil via fetch puro, sem passar pelo cliente auth.
+  // O cliente continua inicializando em segundo plano para uso posterior.
 
-  // Ceder o controle ao event loop (setTimeout 0) para garantir que o
-  // Supabase termine sua _initializePromise antes de chamar getUser().
-  // Sem isso, getMeuPerfil() pode entrar em deadlock durante a inicialização.
-  await new Promise(function (r) { setTimeout(r, 0); });
+  let accessToken = null;
+  let userId = null;
+  try {
+    var lsKey = 'sb-' + SUPABASE_URL.match(/\/\/([^.]+)\./)[1] + '-auth-token';
+    var lsRaw = localStorage.getItem(lsKey);
+    if (lsRaw) {
+      var lsData = JSON.parse(lsRaw);
+      var agora = Math.floor(Date.now() / 1000);
+      if (lsData && lsData.access_token && lsData.expires_at > agora) {
+        accessToken = lsData.access_token;
+        userId = lsData.user && lsData.user.id;
+      }
+    }
+  } catch (e) { /* ignora */ }
 
-  if (!sessao) {
+  if (!accessToken || !userId) {
     location.href = 'login.html';
     return null;
   }
 
-  // Com sessão válida, buscar perfil completo do banco
+  // Buscar perfil completo via fetch direto (sem db.auth)
   try {
-    _perfil = await getMeuPerfil();
+    var resp = await fetch(
+      SUPABASE_URL + '/rest/v1/usuarios?select=*,campus:campi(*),unidade:unidades(*)&id=eq.' + userId,
+      {
+        headers: {
+          'apikey': SUPABASE_ANON,
+          'Authorization': 'Bearer ' + accessToken,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    var rows = await resp.json();
+    _perfil = rows && rows[0] ? rows[0] : null;
   } catch (e) {
     location.href = 'login.html';
     return null;
