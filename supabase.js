@@ -11,38 +11,6 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: { detectSessionInUrl: false, persistSession: true, autoRefreshToken: true }
 });
 
-/* ── Sessão inicial pronta ─────────────────────────────────────
-   Configuramos o listener AGORA (quando supabase.js carrega,
-   antes de qualquer IIFE de página) para não perder o evento
-   INITIAL_SESSION que o Supabase dispara ao terminar a init.
-   As páginas fazem: const sessao = await window._sessaoPromise;
-   ─────────────────────────────────────────────────────────── */
-window._sessaoPromise = new Promise(function (resolve) {
-  var resolved = false;
-
-  var sub = db.auth.onAuthStateChange(function (event, session) {
-    if (!resolved && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
-      resolved = true;
-      if (sub && sub.data && sub.data.subscription) {
-        sub.data.subscription.unsubscribe();
-      }
-      resolve(session);
-    }
-  });
-
-  // Fallback: se nenhum evento chegar em 4 s, tenta getSession diretamente
-  setTimeout(function () {
-    if (!resolved) {
-      resolved = true;
-      db.auth.getSession().then(function (r) {
-        resolve(r.data ? r.data.session : null);
-      }).catch(function () {
-        resolve(null);
-      });
-    }
-  }, 4000);
-});
-
 /* ── Helpers ───────────────────────────────────────────────── */
 async function _check(res) {
   if (res.error) throw res.error;
