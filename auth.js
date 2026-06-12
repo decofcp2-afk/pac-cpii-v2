@@ -17,66 +17,43 @@ const PAGINAS_PUBLICAS = ['login.html', 'publico.html', 'index.html', ''];
 
 let _perfil = null; // cache do perfil na sessão
 
-/* ── Aguardar sessão inicial do Supabase ───────────────────── */
-// onAuthStateChange com INITIAL_SESSION é garantido pelo Supabase v2
-// para disparar mesmo para assinantes tardios, eliminando race conditions.
-function _aguardarSessaoInicial() {
-  return new Promise(function (resolve) {
-    console.log('[auth] aguardando INITIAL_SESSION...');
-    var sub = db.auth.onAuthStateChange(function (event, session) {
-      console.log('[auth] evento:', event, 'sessao:', session ? 'presente' : 'null');
-      if (event === 'INITIAL_SESSION') {
-        console.log('[auth] INITIAL_SESSION recebido, resolvendo promise');
-        resolve(session);
-        // Unsubscribe adiado para evitar race condition se evento for síncrono
-        setTimeout(function() {
-          if (sub && sub.data && sub.data.subscription) {
-            sub.data.subscription.unsubscribe();
-          }
-        }, 0);
-      }
-    });
-    console.log('[auth] subscriber registrado');
-  });
-}
-
 /* ── Inicializar autenticação ──────────────────────────────── */
 async function initAuth(papeis) {
   // papeis: array de papéis permitidos na página (undefined = qualquer logado)
   const page = location.pathname.split('/').pop() || 'index.html';
-  console.log('[auth] initAuth chamado, page:', page);
 
   // Páginas públicas: não verificar
-  if (PAGINAS_PUBLICAS.includes(page)) {
-    console.log('[auth] página pública, retornando null');
-    return null;
+  if (PAGINAS_PUBLICAS.includes(page)) return null;
+
+  // Aguardar Supabase carregar a sessão do localStorage.
+  // A inicialização do auth client é assíncrona; fazemos polling com
+  // até 15 tentativas (1,5 s) para eliminar o race condition.
+  let sessao = null;
+  for (var tentativa = 0; tentativa < 15; tentativa++) {
+    try {
+      var res = await db.auth.getSession();
+      if (res.data && res.data.session) {
+        sessao = res.data.session;
+        break;
+      }
+    } catch (e) { /* ignora erro temporário */ }
+    await new Promise(function (r) { setTimeout(r, 100); });
   }
 
-  // Aguardar Supabase restaurar sessão do localStorage (INITIAL_SESSION).
-  // Isso resolve o race condition entre a inicialização do auth client
-  // e a execução da IIFE da página no carregamento.
-  const sessao = await _aguardarSessaoInicial();
-  console.log('[auth] sessão após INITIAL_SESSION:', sessao ? 'presente' : 'null');
-
   if (!sessao) {
-    console.log('[auth] sem sessão, redirecionando para login');
     location.href = 'login.html';
     return null;
   }
 
   // Com sessão válida, buscar perfil completo do banco
   try {
-    console.log('[auth] buscando perfil...');
     _perfil = await getMeuPerfil();
-    console.log('[auth] perfil:', _perfil ? _perfil.papel : 'null');
   } catch (e) {
-    console.log('[auth] erro ao buscar perfil:', e.message);
     location.href = 'login.html';
     return null;
   }
 
   if (!_perfil) {
-    console.log('[auth] perfil null, redirecionando');
     location.href = 'login.html';
     return null;
   }
@@ -95,13 +72,11 @@ async function initAuth(papeis) {
 
   // Verificar papel permitido
   if (papeis && !papeis.includes(_perfil.papel)) {
-    console.log('[auth] papel não permitido:', _perfil.papel, 'esperado:', papeis);
     location.href = HOME_POR_PAPEL[_perfil.papel] || 'login.html';
     return null;
   }
 
   // Preencher header
-  console.log('[auth] preenchendo header e retornando perfil');
   preencherHeader(_perfil);
 
   return _perfil;
