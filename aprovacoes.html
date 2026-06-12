@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Aprovações — PAC CPII</title>
+  <title>AprovaÃ§Ãµes â PAC CPII</title>
   <link rel="stylesheet" href="style.css?v=24">
 </head>
 <body>
 
 <header id="app-header">
   <div class="header-left">
-    <button id="btn-menu-mobile">☰</button>
+    <button id="btn-menu-mobile">â°</button>
     <div style="width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">CP</div>
-    <div class="header-title">PAC — Colégio Pedro II<small>Plano Anual de Contratações</small></div>
+    <div class="header-title">PAC â ColÃ©gio Pedro II<small>Plano Anual de ContrataÃ§Ãµes</small></div>
   </div>
   <div class="header-right">
     <span class="campus-label" id="header-campus"></span>
@@ -24,20 +24,20 @@
 
 <main id="app-main">
   <div class="page-header">
-    <div><h1 id="titulo-pagina">Aprovações</h1><p id="subtitulo"></p></div>
+    <div><h1 id="titulo-pagina">AprovaÃ§Ãµes</h1><p id="subtitulo"></p></div>
     <div style="display:flex;gap:8px;align-items:center">
-      <label style="font-size:13px;font-weight:500">Exercício:</label>
+      <label style="font-size:13px;font-weight:500">ExercÃ­cio:</label>
       <select id="sel-exercicio"></select>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-title" id="card-titulo">Demandas aguardando análise</div>
+    <div class="card-title" id="card-titulo">Demandas aguardando anÃ¡lise</div>
     <div class="table-wrap">
       <table>
         <thead><tr>
           <th>Objeto</th><th>Unidade</th><th>Enviada em</th>
-          <th class="col-num">Qtd</th><th class="col-num">Valor est.</th><th class="col-actions">Ações</th>
+          <th class="col-num">Qtd</th><th class="col-num">Valor est.</th><th class="col-actions">AÃ§Ãµes</th>
         </tr></thead>
         <tbody id="tbody-aprovacoes">
           <tr><td colspan="6"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>
@@ -59,27 +59,36 @@
 <script src="auth.js?v=24"></script>
 <script>
 (async function () {
-  const perfil = await initAuth(['chefia','ord_despesas','licitacoes']);
+  console.log('[IIFE] start');
+  var perfil;
+  try {
+    perfil = await initAuth(['chefia','ord_despesas','licitacoes']);
+    console.log('[IIFE] initAuth returned:', perfil ? perfil.papel : 'NULL');
+  } catch(e) {
+    console.error('[IIFE] initAuth threw:', e && e.message);
+    return;
+  }
   if (!perfil) return;
   buildSidebar(perfil);
+  console.log('[IIFE] after buildSidebar');
   initUI();
 
   const papel = perfil.papel;
 
-  // Configurar título e subtítulo conforme papel
+  // Configurar tÃ­tulo e subtÃ­tulo conforme papel
   if (papel === 'chefia') {
-    document.getElementById('titulo-pagina').textContent = 'Aprovações';
-    document.getElementById('card-titulo').textContent = 'Demandas submetidas aguardando aprovação';
+    document.getElementById('titulo-pagina').textContent = 'AprovaÃ§Ãµes';
+    document.getElementById('card-titulo').textContent = 'Demandas submetidas aguardando aprovaÃ§Ã£o';
     document.getElementById('subtitulo').textContent =
-      'Campus: ' + (perfil.campus ? perfil.campus.nome : '—');
+      'Campus: ' + (perfil.campus ? perfil.campus.nome : 'â');
   } else if (papel === 'ord_despesas') {
     document.getElementById('titulo-pagina').textContent = 'Demandas aprovadas';
     document.getElementById('card-titulo').textContent = 'Demandas aprovadas pela chefia (de acordo)';
     document.getElementById('subtitulo').textContent =
-      'Campus: ' + (perfil.campus ? perfil.campus.nome : '—');
+      'Campus: ' + (perfil.campus ? perfil.campus.nome : 'â');
   } else {
     document.getElementById('titulo-pagina').textContent = 'Painel de demandas';
-    document.getElementById('card-titulo').textContent = 'Demandas aprovadas aguardando priorização';
+    document.getElementById('card-titulo').textContent = 'Demandas aprovadas aguardando priorizaÃ§Ã£o';
     document.getElementById('subtitulo').textContent = 'Todos os campi';
   }
 
@@ -102,75 +111,55 @@
     try {
       let demandas;
       if (papel === 'chefia') {
-        // Chefia vê demandas submetidas do seu campus (campus_id, não unidade_id)
         demandas = await listarDemandasDoCampus(perfil.campus_id, exercicio, 'submetida');
       } else if (papel === 'ord_despesas') {
-        // Ord. despesas vê demandas já aprovadas (de_acordo) do seu campus
         demandas = await listarDemandasDoCampus(perfil.campus_id, exercicio, 'de_acordo');
       } else {
-        // Licitações vê todas as demandas de_acordo (todos os campi)
         demandas = await listarTodasDemandas(exercicio, 'de_acordo');
       }
-
       if (!demandas || demandas.length === 0) {
-        var msgMap = {
-          chefia: 'Nenhuma demanda submetida pendente de aprovação.',
-          ord_despesas: 'Nenhuma demanda aprovada aguardando priorização.',
-          licitacoes: 'Nenhuma demanda aprovada no momento.'
-        };
-        tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">' +
-          '<div class="empty-icon">✅</div>' +
-          '<h3>Nada pendente</h3>' +
-          '<p>' + (msgMap[papel] || 'Sem demandas.') + '</p>' +
-          '</div></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><h3>Nada pendente</h3></div></td></tr>';
         return;
       }
-
-      tbody.innerHTML = demandas.map(function (d) {
-        var unidade = d.unidade ? d.unidade.sigla : (d.campus ? d.campus.sigla : '—');
-        return '<tr>' +
-          '<td><a href="#" onclick="verDetalhe(\'' + d.id + '\');return false">' +
-            d.descricao_objeto.substring(0,60) + (d.descricao_objeto.length > 60 ? '…' : '') +
-          '</a></td>' +
-          '<td>' + unidade + '</td>' +
-          '<td>' + formatData(d.criado_em) + '</td>' +
-          '<td class="col-num">' + Number(d.quantidade).toLocaleString('pt-BR') + ' ' + d.unidade_medida + '</td>' +
-          '<td class="col-num">' + formatMoeda(d.valor_estimado) + '</td>' +
-          '<td class="col-actions">' +
-            '<button class="btn btn-sm btn-secondary" onclick="verDetalhe(\'' + d.id + '\')">Analisar</button>' +
-          '</td>' +
-        '</tr>';
+      tbody.innerHTML = demandas.map(function(d) {
+        return '<tr><td><a href="#" onclick="verDetalhe(\''+d.id+'\');return false">'+d.descricao_objeto.substring(0,60)+'</a></td></tr>';
       }).join('');
-
       window._demandas = demandas;
     } catch (err) {
-      tbody.innerHTML = '<tr><td colspan="6"><div class="alert alert-danger">Erro: ' + err.message + '</div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6">Erro: ' + err.message + '</td></tr>';
     }
   }
 
-  window.verDetalhe = async function (id) {
-    var d = (window._demandas || []).find(function (x) { return x.id === id; }) || await getDemanda(id);
+  window.verDetalhe = async function(id) {
+    var d = (window._demandas || []).find(function(x) { return x.id === id; }) || await getDemanda(id);
     var painel = document.getElementById('painel-detalhe');
     painel.style.display = '';
-
-    document.getElementById('detalhe-conteudo').innerHTML =
-      '<div class="form-grid form-grid-2" style="gap:12px">' +
-        '<div><strong>Objeto:</strong><br>' + d.descricao_objeto + '</div>' +
-        '<div><strong>Unidade:</strong><br>' + (d.unidade ? d.unidade.nome : (d.campus ? d.campus.nome : '—')) + '</div>' +
-        '<div style="grid-column:1/-1"><strong>Justificativa:</strong><br><em>' + d.justificativa + '</em></div>' +
-        '<div><strong>Quantidade:</strong> ' + Number(d.quantidade).toLocaleString('pt-BR') + ' ' + d.unidade_medida + '</div>' +
-        '<div><strong>Valor estimado:</strong> ' + formatMoeda(d.valor_estimado) + '</div>' +
-        '<div><strong>Possui contrato vigente:</strong> ' + (d.possui_contrato ? 'Sim' : 'Não') + '</div>' +
-        (d.possui_contrato ? '<div><strong>Risco não prorrogação:</strong> ' + (d.risco_nao_prorrogacao ? 'Sim' : 'Não') + '</div>' : '') +
-        '<div><strong>Demanda exclusiva ME/EPP:</strong> ' + (d.exclusiva ? 'Sim' : 'Não') + '</div>' +
-        '<div style="grid-column:1/-1">' +
-          '<strong>Gestor Titular:</strong> ' + d.gestor_titular_nome + ' — SIAPE ' + d.gestor_titular_siape + ' — ' + d.gestor_titular_email + '<br>' +
-          '<strong>Gestor Substituto:</strong> ' + d.gestor_substituto_nome + ' — SIAPE ' + d.gestor_substituto_siape + ' — ' + d.gestor_substituto_email + '<br>' +
-          '<strong>Fiscal Titular:</strong> ' + d.fiscal_titular_nome + ' — SIAPE ' + d.fiscal_titular_siape + ' — ' + d.fiscal_titular_email + '<br>' +
-          '<strong>Fiscal Substituto:</strong> ' + d.fiscal_substituto_nome + ' — SIAPE ' + d.fiscal_substituto_siape + ' — ' + d.fiscal_substituto_email +
-        '</div>' +
-      '</div>';
-
-    // Botões conforme papel
-    var botoesHtml = '<button class="btn btn-danger" onclick="reprovar(\'' + d.id + '\')">Reprovar</button>';
-    if (papel
+    document.getElementById('detalhe-conteudo').innerHTML = '<p><strong>'+d.descricao_objeto+'</strong></p>';
+    var bt = '<button class="btn btn-danger" onclick="reprovar(\''+i.id+'\')">Reprovar</button>';
+    if (papel === 'chefia') bt += ' <button class="btn btn-primary" onclick="aprovar(\''+i.id+'\')">Aprovar</button>';
+    else if (papel === 'ord_despesas') bt += ' <button class="btn btn-primary" onclick="aprovar(\''+i.id+'\')">Encaminhar</button>';
+    else if (papel === 'licitacoes') bt += ' <button class="btn btn-secondary" onclick="reverterStatus(\''+i.id+'\',\'de_acordo\')">Reverter</button>';
+    document.getElementById('detalhe-acoes').innerHTML = bt;
+    painel.scrollIntoView({behavior:'smooth',block:'nearest'});
+  };
+  window.reprovar = async function(id) {
+    var just = prompt('Motivo da reprovaÃ§Ã£o:');
+    if (just === null) return;
+    try { await reprovarDemanda(id,getPerfil().id,just.trim()); showToast('Reprovada.','success'); document.getElementById('painel-detalhe').style.display='none'; carregarAprovacoes(); }
+    catch(e) { showToast('Erro: '+e.message,'error'); }
+  };
+  window.aprovar = async function(id) {
+    try { await aprovarDemanda(id,getPerfil().id); showToast('Aprovado.','success'); document.getElementById('painel-detalhe').style.display='none'; carregarAprovacoes(); }
+    catch(e) { showToast('Erro: '+e.message,'error'); }
+  };
+  window.reverterStatus = async function(id,novoStatus) {
+    var just = prompt('Justificativa:');
+    if (just === null) return;
+    try { await reverterDemanda(id,novoStatus,getPerfil().id,just.trim()); showToast('Revertido.','success'); document.getElementById('painel-detalhe').style.display='none'; carregarAprovacoes(); }
+    catch(e) { showToast('Erro: '+e.message,'error'); }
+  };
+  carregarAprovacoes();
+})();
+</script>
+</body>
+</html>
