@@ -184,10 +184,14 @@ async function excluirDotacao(id) {
  * dotacoes NÃO tem: categoria, unidade_id — tem: descricao
  */
 async function listarDistribuicoes(campusId, exercicio) {
-  return _check(await db
+  const all = await _check(await db
     .from('distribuicoes')
     .select('*, dotacao:dotacoes(id,descricao,valor_total,campus_id,exercicio), unidade:unidades!unidade_id(id,nome,sigla)')
     .order('criado_em', { ascending: false }));
+  let filtered = all;
+  if (campusId)  filtered = filtered.filter(d => d.dotacao && d.dotacao.campus_id === campusId);
+  if (exercicio) filtered = filtered.filter(d => d.dotacao && d.dotacao.exercicio === parseInt(exercicio));
+  return filtered;
 }
 
 async function criarDistribuicao(dados) {

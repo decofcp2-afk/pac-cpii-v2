@@ -172,7 +172,14 @@
       _dotacoes = todas; // todas as dotações do campus
 
       // Carregar filhos para distribuição
-      _filhos = await listarFilhosDiretos(perfil.unidade_id);
+      // Para roles sem unidade_id (chefia, ord_despesas, licitacoes), listar todas as unidades do campus
+      if (perfil.unidade_id) {
+        _filhos = await listarFilhosDiretos(perfil.unidade_id);
+      } else if (perfil.campus_id) {
+        _filhos = await listarUnidadesDoCampus(perfil.campus_id);
+      } else {
+        _filhos = [];
+      }
       const cardDist = document.getElementById('card-distribuir');
       cardDist.style.display = _filhos.length > 0 && _dotacoes.length > 0 ? '' : 'none';
 
@@ -286,6 +293,11 @@
 
   async function carregarRecebidos(exercicio) {
     const el = document.getElementById('lista-recebidos');
+    // Roles sem unidade_id (chefia, ord_despesas, licitacoes) não recebem dotações
+    if (!perfil.unidade_id) {
+      document.getElementById('card-recebidos').style.display = 'none';
+      return;
+    }
     try {
       const dists = await listarDistribuicoes(perfil.campus_id, exercicio);
       const minhas = dists.filter(d => d.unidade_id === perfil.unidade_id);
