@@ -253,4 +253,36 @@ const PAPEL_LABELS = {
         if (sessaoAtual) {
           await db.auth.setSession({
             access_token:  sessaoAtual.access_token,
-            refres
+            refresh_token: sessaoAtual.refresh_token
+          });
+        }
+
+        // Inserir perfil na tabela usuarios
+        const { error: insertError } = await db.from('usuarios').insert({
+          id: novoId,
+          nome,
+          email,
+          papel,
+          unidade_id: unidade || null,
+          campus_id: perfil.campus_id,
+          ativo: true,
+          primeiro_acesso: true
+        });
+        if (insertError) throw insertError;
+
+        showToast('Usuário criado com sucesso.', 'success');
+        fecharModal('modal-usuario');
+        carregarUsuarios();
+      }
+    } catch (err) {
+      showToast('Erro: ' + err.message, 'error');
+    } finally {
+      setLoading(this, false);
+    }
+  });
+
+  carregarUsuarios();
+})();
+</script>
+</body>
+</html>
