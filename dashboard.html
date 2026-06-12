@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dashboard — PAC CPII</title>
+  <title>Dashboard â PAC CPII</title>
   <link rel="stylesheet" href="style.css?v=24">
 </head>
 <body>
 
 <header id="app-header">
   <div class="header-left">
-    <button id="btn-menu-mobile">☰</button>
+    <button id="btn-menu-mobile">â°</button>
     <div style="width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">CP</div>
     <div class="header-title">
-      PAC — Colégio Pedro II
-      <small>Plano Anual de Contratações</small>
+      PAC â ColÃ©gio Pedro II
+      <small>Plano Anual de ContrataÃ§Ãµes</small>
     </div>
   </div>
   <div class="header-right">
@@ -32,19 +32,19 @@
   <div class="page-header">
     <div>
       <h1>Dashboard</h1>
-      <p id="subtitulo">Visão geral do exercício atual</p>
+      <p id="subtitulo">VisÃ£o geral do exercÃ­cio atual</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
-      <label style="font-size:13px;font-weight:500">Exercício:</label>
+      <label style="font-size:13px;font-weight:500">ExercÃ­cio:</label>
       <select id="sel-exercicio" style="width:100px"></select>
     </div>
   </div>
 
   <div class="stats-grid" id="stats-grid">
-    <div class="stat-card"><div class="stat-label">Total de Demandas</div><div class="stat-value azul" id="st-total">—</div></div>
-    <div class="stat-card"><div class="stat-label">Homologadas</div><div class="stat-value dourado" id="st-homologadas">—</div></div>
-    <div class="stat-card"><div class="stat-label">Aguardando Aprovação</div><div class="stat-value" id="st-submetidas">—</div></div>
-    <div class="stat-card"><div class="stat-label">Valor Total (R$)</div><div class="stat-value azul" id="st-valor" style="font-size:18px">—</div></div>
+    <div class="stat-card"><div class="stat-label">Total de Demandas</div><div class="stat-value azul" id="st-total">â</div></div>
+    <div class="stat-card"><div class="stat-label">Homologadas</div><div class="stat-value dourado" id="st-homologadas">â</div></div>
+    <div class="stat-card"><div class="stat-label">Aguardando AprovaÃ§Ã£o</div><div class="stat-value" id="st-submetidas">â</div></div>
+    <div class="stat-card"><div class="stat-label">Valor Total (R$)</div><div class="stat-value azul" id="st-valor" style="font-size:18px">â</div></div>
   </div>
 
   <div class="card">
@@ -53,8 +53,8 @@
   </div>
 
   <div class="card">
-    <div class="card-title">Últimas demandas</div>
-    <div id="lista-recente"><div class="loading-overlay"><span class="spinner"></span> Carregando…</div></div>
+    <div class="card-title">Ãltimas demandas</div>
+    <div id="lista-recente"><div class="loading-overlay"><span class="spinner"></span> Carregandoâ¦</div></div>
   </div>
 </main>
 
@@ -85,9 +85,9 @@
     const exercicio = parseInt(selExercicio.value);
     const escopo = perfil.papel === 'administrador'
       ? 'Global'
-      : (perfil.campus ? perfil.campus.nome : '—');
+      : (perfil.campus ? perfil.campus.nome : 'â');
     document.getElementById('subtitulo').textContent =
-      'Exercício ' + exercicio + ' — ' + escopo;
+      'ExercÃ­cio ' + exercicio + ' â ' + escopo;
 
     try {
       let demandas;
@@ -116,7 +116,7 @@
 
       const barsEl = document.getElementById('status-bars');
       if (total === 0) {
-        barsEl.innerHTML = '<div class="empty-state"><p>Nenhuma demanda registrada para este exercício.</p></div>';
+        barsEl.innerHTML = '<div class="empty-state"><p>Nenhuma demanda registrada para este exercÃ­cio.</p></div>';
       } else {
         barsEl.innerHTML = STATUS_ORDER.map(function (s) {
           const cnt = statusCount[s] || 0;
@@ -138,16 +138,16 @@
       const listaEl = document.getElementById('lista-recente');
       if (recentes.length === 0) {
         listaEl.innerHTML = '<div class="empty-state">' +
-          '<div class="empty-icon">📋</div>' +
+          '<div class="empty-icon">ð</div>' +
           '<h3>Nenhuma demanda ainda</h3>' +
-          '<p>As demandas registradas aparecerão aqui.</p>' +
-          (perfil.papel === 'chefe_secao' ? '<a href="demandas.html" class="btn btn-primary btn-sm">Criar primeira demanda →</a>' : '') +
+          '<p>As demandas registradas aparecerÃ£o aqui.</p>' +
+          (perfil.papel === 'chefe_secao' ? '<a href="demandas.html" class="btn btn-primary btn-sm">Criar primeira demanda â</a>' : '') +
         '</div>';
       } else {
         const linhas = recentes.map(function (d) {
-          const unidade = d.unidade ? d.unidade.sigla : (d.campus ? d.campus.sigla : '—');
+          const unidade = d.unidade ? d.unidade.sigla : (d.campus ? d.campus.sigla : 'â');
           return '<tr>' +
-            '<td><a href="demandas.html">' + d.descricao_objeto.substring(0, 60) + (d.descricao_objeto.length > 60 ? '…' : '') + '</a></td>' +
+            '<td><a href="demandas.html">' + d.descricao_objeto.substring(0, 60) + (d.descricao_objeto.length > 60 ? 'â¦' : '') + '</a></td>' +
             '<td>' + unidade + '</td>' +
             '<td>' + statusBadge(d.status) + '</td>' +
             '<td class="col-num">' + formatMoeda(d.valor_estimado) + '</td>' +
@@ -162,4 +162,12 @@
     } catch (err) {
       showToast('Erro ao carregar dados: ' + err.message, 'error');
       document.getElementById('lista-recente').innerHTML =
-    
+            '<div class="alert alert-danger">Erro ao carregar demandas: ' + err.message + '</div>';
+    }
+  }
+
+  carregarDados();
+})();
+</script>
+</body>
+</html>
