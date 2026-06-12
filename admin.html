@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Administração — PAC CPII</title>
-  <link rel="stylesheet" href="style.css?v=22">
+  <link rel="stylesheet" href="style.css?v=24">
 </head>
 <body>
 
@@ -125,9 +125,274 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase.js?v=22"></script>
-<script src="ui.js?v=22"></script>
-<script src="auth.js?v=22"></script>
+<script src="supabase.js?v=24"></script>
+<script src="ui.js?v=24"></script>
+<script src="auth.js?v=24"></script>
+<script>
+const TIPO_LABELS = { campus:'Campus', pro_reitoria:'Pró-Reitoria', diretoria:'Diretoria', secao:'Seção' };
+
+(async function () {
+  const perfil = await initAuth(['administrador']);
+  if (!perfil) return;
+  document.getElementById('header-nome').textContent = perfil.nome;
+  document.getElementById('btn-logout').addEventListener('click', doLogout);
+  initUI();
+
+  let _campusSelecionado = null;
+  let _unidades = [];
+
+  // ── Campi ────────────────────────────────────────────────── //
+  async function carregarCampi() {
+    const tbody = document.getElementById('tbody-campi');
+    tbody.innerHTML = '<tr><td colspan="4"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>';
+    try {
+      const [campi, unidadeCounts] = await Promise.all([listarCampi(), contarUnidadesPorCampus()]);
+      if (campi.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><h3>Nenhum campus cadastrado</h3></div></td></tr>';
+        return;
+      }
+      tbody.innerHTML = campi.map(c => `<tr>
+        <td>${c.nome}</td><td>${c.sigla}</td><td>${unidadeCounts[c.id] || 0}</td>
+        <td class="col-actions">
+          <button class="btn btn-sm btn-secondary" onclick="selecionarCampus('${c.id}','${c.nome}')">Gerenciar</button>
+        </td>
+      </tr>`).join('');
+    } catch (err) { showToast('Erro: '+err.message,'error'); }
+  }
+
+  window.selecionarCampus = async function (id, nome) {
+    _campusSelecionado = id;
+    document.getElementById('campus-selecionado-nome').textContent = nome;
+    document.getElementById('card-unidades').style.display = '';
+    document.getElementById('card-usuarios-admin').style.display = '';
+    await Promise.all([carregarUnidades(), carregarUsuariosAdmin()]);
+  };
+
+  // Modal campus
+  document.getElementById('btn-novo-campus').addEventListener('click', function () {
+    document.getElementById('mc-nome').value = '';
+    document.getElementById('mc-sigla').value = '';
+    document.getElementById('mc-nome-err').style.display = 'none';
+    document.getElementById('mc-sigla-err').style.display = 'none';
+    document.getElementById('modal-campus').style.display = '';
+  });
+  document.getElementById('mc-cancelar').addEventListener('click', function () {
+    document.getElementById('modal-campus').style.display = 'none';
+  });
+  document.getElementById('mc-salvar').addEventListener('click', async function () {
+    const nome  = document.getElementById('mc-nome').value.trim();
+    const sigla = document.getElementById('mc-sigla').value.trim().toUpperCase();
+    let ok = true;
+    if (!nome)  { document.getElementById('mc-nome-err').textContent='Campo obrigatório.'; document.getElementById('mc-nome-err').style.display=''; ok=false; }
+    if (!sigla) { document.getElementById('mc-sigla-err').textContent='Campo obrigatório.'; document.getElementById('mc-sigla-err').style.display=''; ok=false; }
+    if (!ok) return;
+    setLoading(this, true);
+    try {
+      await criarCampus({ nome, sigla });
+      document.getElementById('modal-campus').style.display = 'none';
+      showToast('Campus criado.', 'success');
+      carregarCampi();
+    } catch (err) { showToast('Erro: '+err.message,'error'); }
+    finally { setLoading(this, false); }
+  });
+
+  // ── Unidades ─────────────────────────────────────────────── //
+  async function carregarUnidades() {
+    if (!_campusSelecionado) return;
+    const tbody = document.getElementById('tbody-unidades');
+    tbody.innerHTML = '<tr><td colspan="5"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>';
+    try {
+      _unidades = await listarUnidadesDoCampus(_campusSelecionado);
+      const parentSel = document.getElementById('mu-parent');
+      parentSel.innerHTML = '<option value="">— Raiz do campus —</option>' +
+        _unidades.map(u => `<option value="${u.id}">${u.nome} (${u.sigla})</option>`).join('');
+
+      if (_unidades.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><h3>Nenhuma unidade cadastrada</h3></div></td></tr>';
+        return;
+      }
+      tbody.innerHTML = _unidades.map(u => `<tr>
+        <td>${u.nome}</td><td>${u.sigla}</td>
+        <td>${TIPO_LABELS[u.tipo]||u.tipo}</td>
+        <td>${u.parent ? u.parent.sigla : '—'}</td>
+        <td class="col-actions">
+          <button class="btn btn-sm btn-secondary" onclick="editarUnidade('${u.id}')">Editar</button>
+        </td>
+      </tr>`).join('');
+    } catch (err) { showToast('Erro: '+err.message,'error'); }
+  }
+
+  document.getElementById('btn-nova-unidade').addEventListener('click', function () {
+    document.getElementById('mu-titulo').textContent = 'Nova unidade';
+    document.getElementById('mu-nome').value = '';
+    document.getElementById('mu-sigla').value = '';
+    document.getElementById('mu-tipo').value = 'diretoria';
+    document.getElementById('mu-parent').value = '';
+    document.getElementById('mu-nome-err').style.display = 'none';
+    document.getElementById('mu-sigla-err').style.display = 'none';
+    document.getElementById('modal-unidade').style.display = '';
+    document.getElementById('modal-unidade').dataset.editId = '';
+  });
+
+  window.editarUnidade = function (id) {
+    const u = _unidades.find(x => x.id === id);
+    if (!u) return;
+    document.getElementById('mu-titulo').textContent = 'Editar unidade';
+    document.getElementById('mu-nome').value = u.nome;
+    document.getElementById('mu-sigla').value = u.sigla;
+    document.getElementById('mu-tipo').value = u.tipo;
+    document.getElementById('mu-parent').value = u.parent_id || '';
+    document.getElementById('modal-unidade').style.display = '';
+    document.getElementById('modal-unidade').dataset.editId = id;
+  };
+
+  document.getElementById('mu-cancelar').addEventListener('click', function () {
+    document.getElementById('modal-unidade').style.display = 'none';
+  });
+  document.getElementById('mu-salvar').addEventListener('click', async function () {
+    const nome   = document.getElementById('mu-nome').value.trim();
+    const sigla  = document.getElementById('mu-sigla').value.trim().toUpperCase();
+    const tipo   = document.getElementById('mu-tipo').value;
+    const parent = document.getElementById('mu-parent').value || null;
+    const editId = document.getElementById('modal-unidade').dataset.editId;
+    let ok = true;
+    if (!nome)  { document.getElementById('mu-nome-err').textContent='Campo obrigatório.'; document.getElementById('mu-nome-err').style.display=''; ok=false; }
+    if (!sigla) { document.getElementById('mu-sigla-err').textContent='Campo obrigatório.'; document.getElementById('mu-sigla-err').style.display=''; ok=false; }
+    if (!ok) return;
+    setLoading(this, true);
+    try {
+      if (editId) {
+        await atualizarUnidade(editId, { nome, sigla, tipo, parent_id: parent });
+      } else {
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Administração — PAC CPII</title>
+  <link rel="stylesheet" href="style.css?v=24">
+</head>
+<body>
+
+<header id="app-header">
+  <div class="header-left">
+    <button id="btn-menu-mobile">☰</button>
+    <div style="width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">CP</div>
+    <div class="header-title">PAC — Colégio Pedro II<small>Administração Global</small></div>
+  </div>
+  <div class="header-right">
+    <span id="header-nome"></span>
+    <button id="btn-logout">Sair</button>
+  </div>
+</header>
+
+<main id="app-main" style="margin-left:0">
+  <div class="page-header">
+    <div><h1>Administração</h1><p>Gestão global de campi, unidades e usuários</p></div>
+  </div>
+
+  <!-- Campi -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:0">Campi cadastrados</div>
+      <button class="btn btn-primary btn-sm" id="btn-novo-campus">+ Novo campus</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nome</th><th>Sigla</th><th>Unidades</th><th class="col-actions">Ações</th></tr></thead>
+        <tbody id="tbody-campi">
+          <tr><td colspan="4"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Unidades do campus selecionado -->
+  <div class="card" id="card-unidades" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:0">Unidades — <span id="campus-selecionado-nome"></span></div>
+      <button class="btn btn-primary btn-sm" id="btn-nova-unidade">+ Nova unidade</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nome</th><th>Sigla</th><th>Tipo</th><th>Unidade pai</th><th class="col-actions">Ações</th></tr></thead>
+        <tbody id="tbody-unidades"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Usuários do campus selecionado -->
+  <div class="card" id="card-usuarios-admin" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:0">Usuários do campus</div>
+      <button class="btn btn-primary btn-sm" id="btn-novo-usuario-admin">+ Novo usuário</button>
+    </div>
+    <div id="lista-usuarios-admin"></div>
+  </div>
+</main>
+
+<!-- Modal campus -->
+<div id="modal-campus" style="display:none">
+  <div class="modal-backdrop">
+    <div class="modal">
+      <h2 id="mc-titulo">Novo campus</h2>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Nome <span style="color:#EF4444">*</span></label>
+        <input type="text" id="mc-nome" placeholder="Ex: Campus Humaitá II">
+        <span class="field-error" id="mc-nome-err" style="display:none"></span>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Sigla <span style="color:#EF4444">*</span></label>
+        <input type="text" id="mc-sigla" placeholder="Ex: CHII">
+        <span class="field-error" id="mc-sigla-err" style="display:none"></span>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="mc-cancelar">Cancelar</button>
+        <button class="btn btn-primary" id="mc-salvar">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal unidade -->
+<div id="modal-unidade" style="display:none">
+  <div class="modal-backdrop">
+    <div class="modal">
+      <h2 id="mu-titulo">Nova unidade</h2>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Nome <span style="color:#EF4444">*</span></label>
+        <input type="text" id="mu-nome">
+        <span class="field-error" id="mu-nome-err" style="display:none"></span>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Sigla <span style="color:#EF4444">*</span></label>
+        <input type="text" id="mu-sigla">
+        <span class="field-error" id="mu-sigla-err" style="display:none"></span>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Tipo <span style="color:#EF4444">*</span></label>
+        <select id="mu-tipo">
+          <option value="campus">Campus (raiz)</option>
+          <option value="pro_reitoria">Pró-Reitoria</option>
+          <option value="diretoria">Diretoria</option>
+          <option value="secao">Seção</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Unidade pai</label>
+        <select id="mu-parent"><option value="">— Raiz do campus —</option></select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="mu-cancelar">Cancelar</button>
+        <button class="btn btn-primary" id="mu-salvar">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="supabase.js?v=24"></script>
+<script src="ui.js?v=24"></script>
+<script src="auth.js?v=24"></script>
 <script>
 const TIPO_LABELS = { campus:'Campus', pro_reitoria:'Pró-Reitoria', diretoria:'Diretoria', secao:'Seção' };
 
