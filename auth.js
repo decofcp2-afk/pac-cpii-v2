@@ -30,6 +30,11 @@ async function initAuth(papeis) {
   // e resolve com a sessão assim que o evento INITIAL_SESSION dispara.
   const sessao = await window._sessaoPromise;
 
+  // Ceder o controle ao event loop (setTimeout 0) para garantir que o
+  // Supabase termine sua _initializePromise antes de chamar getUser().
+  // Sem isso, getMeuPerfil() pode entrar em deadlock durante a inicialização.
+  await new Promise(function (r) { setTimeout(r, 0); });
+
   if (!sessao) {
     location.href = 'login.html';
     return null;
