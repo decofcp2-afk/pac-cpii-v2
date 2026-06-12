@@ -25,20 +25,10 @@ async function initAuth(papeis) {
   // Páginas públicas: não verificar
   if (PAGINAS_PUBLICAS.includes(page)) return null;
 
-  // Aguardar Supabase carregar a sessão do localStorage.
-  // A inicialização do auth client é assíncrona; fazemos polling com
-  // até 15 tentativas (1,5 s) para eliminar o race condition.
-  let sessao = null;
-  for (var tentativa = 0; tentativa < 15; tentativa++) {
-    try {
-      var res = await db.auth.getSession();
-      if (res.data && res.data.session) {
-        sessao = res.data.session;
-        break;
-      }
-    } catch (e) { /* ignora erro temporário */ }
-    await new Promise(function (r) { setTimeout(r, 100); });
-  }
+  // Aguardar Supabase concluir a inicialização do auth client.
+  // window._sessaoPromise é configurada em supabase.js (antes desta IIFE)
+  // e resolve com a sessão assim que o evento INITIAL_SESSION dispara.
+  const sessao = await window._sessaoPromise;
 
   if (!sessao) {
     location.href = 'login.html';
