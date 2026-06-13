@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PAC — Colégio Pedro II</title>
-  <link rel="stylesheet" href="style.css?v=25">
+  <link rel="stylesheet" href="style.css?v=26">
 </head>
 <body class="publico-page">
 
@@ -72,18 +72,19 @@
 <!-- jsPDF para geração de PDF -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="supabase.js?v=25"></script>
-<script src="ui.js?v=25"></script>
+<script src="supabase.js?v=26"></script>
+<script src="ui.js?v=26"></script>
 <script>
 (async function () {
-  const selCampus   = document.getElementById('sel-campus');
+  const selCampus    = document.getElementById('sel-campus');
   const selExercicio = document.getElementById('sel-exercicio');
-  const btnPdf      = document.getElementById('btn-pdf');
-  const resultado   = document.getElementById('resultado');
+  const btnPdf       = document.getElementById('btn-pdf');
+  const resultado    = document.getElementById('resultado');
 
   let _campusNome = '';
   let _exercicio  = null;
   let _demandas   = [];
+  let _orcamento  = null; // { total, totalDistribuido, naoDistribuido, linhas:[], chart:[] }
 
   // Carregar campi
   try {
@@ -140,68 +141,166 @@
     resultado.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Carregando plano…</div>';
 
     try {
-      _demandas = await listarDemandasHomologadas(selCampus.value, _exercicio);
+      _demandas  = await listarDemandasHomologadas(selCampus.value, _exercicio);
+      _orcamento = await carregarOrcamento(selCampus.value, _exercicio);
       renderResultado();
-      if (_demandas.length > 0) btnPdf.style.display = '';
+      btnPdf.style.display = (_demandas.length > 0 || _orcamento) ? '' : 'none';
     } catch (err) {
       resultado.innerHTML = '<div class="alert alert-danger">Erro ao carregar dados.</div>';
     }
   });
 
+  // ── Orçamento: total, distribuição por seção e saldos ─────────── //
+  async function carregarOrcamento(campusId, exercicio) {
+    try {
+      const dots = await listarDotacoesPublico(campusId, exercicio);
+      if (!dots || dots.length === 0) return null;
+      const total = dots.reduce((s, d) => s + Number(d.valor_total || 0), 0);
+
+      // distribuições de todas as dotações do exercício
+      let dists = [];
+      for (const d of dots) {
+        const ds = await listarDistribuicoesPublico(d.id);
+        dists = dists.concat(ds);
+      }
+      const unidades = await listarUnidadesDoCampus(campusId);
+      const byId = {}; unidades.forEach(u => byId[u.id] = u);
+
+      const recebido = {};
+      dists.forEach(d => { recebido[d.unidade_id] = (recebido[d.unidade_id] || 0) + Number(d.valor || 0); });
+
+      function descendentes(uid) {
+        const out = []; const stack = unidades.filter(u => u.parent_id === uid).map(u => u.id);
+        while (stack.length) { const x = stack.pop(); out.push(x); unidades.forEach(c => { if (c.parent_id === x) stack.push(c.id); }); }
+        return out;
+      }
+
+      const totalDistribuido = Object.values(recebido).reduce((s, v) => s + v, 0);
+      const naoDistribuido   = total - totalDistribuido;
+
+      // Linhas da tabela: ordenadora + cada unidade que recebeu
+      const linhas = [{ nivel: 0, sigla: '', nome: _campusNome + ' — unidade ordenadora', recebido: total, repassado: totalDistribuido, saldo: naoDistribuido }];
+      Object.keys(recebido).map(uid => {
+        const u = byId[uid];
+        const desc = descendentes(uid);
+        const rep = desc.reduce((s, id) => s + (recebido[id] || 0), 0);
+        return { nivel: 1, sigla: u ? u.sigla : '?', nome: u ? u.nome : '(unidade)', recebido: recebido[uid], repassado: rep, saldo: recebido[uid] - rep };
+      }).sort((a, b) => b.recebido - a.recebido).forEach(l => linhas.push(l));
+
+      // Gráfico: cada seção (recebido) + reserva não distribuída
+      const chart = Object.keys(recebido).map(uid => ({ sigla: byId[uid] ? byId[uid].sigla : '?', nome: byId[uid] ? byId[uid].nome : '(unidade)', valor: recebido[uid], reserva: false }))
+        .sort((a, b) => b.valor - a.valor);
+      if (naoDistribuido > 0.005) chart.push({ sigla: 'Não distribuído', nome: 'Reserva não distribuída', valor: naoDistribuido, reserva: true });
+
+      return { total, totalDistribuido, naoDistribuido, linhas, chart, temDistribuicao: totalDistribuido > 0 };
+    } catch (e) {
+      // Sem permissão de leitura pública das tabelas de orçamento → omite a seção
+      console.warn('[orcamento publico] indisponivel:', e && e.message);
+      return null;
+    }
+  }
+
+  function barChartHTML(items, total) {
+    const max = Math.max.apply(null, items.map(i => i.valor).concat([1]));
+    return items.map(i => {
+      const pct = total > 0 ? (i.valor / total * 100) : 0;
+      const w   = max > 0 ? (i.valor / max * 100) : 0;
+      return '<div style="margin-bottom:9px">' +
+        '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">' +
+          '<span style="font-weight:500">' + i.sigla + '</span>' +
+          '<span style="color:var(--cinza-medio)">' + formatMoeda(i.valor) + ' · ' + pct.toFixed(1) + '%</span>' +
+        '</div>' +
+        '<div style="background:#EEF0F4;border-radius:5px;height:16px;overflow:hidden">' +
+          '<div style="width:' + w + '%;height:100%;background:' + (i.reserva ? '#9AA3AF' : '#3BA776') + '"></div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function orcamentoCardHTML(orc) {
+    if (!orc) return '';
+    const tabela = '<div class="table-wrap"><table>' +
+      '<thead><tr><th>Unidade / Setor</th><th class="col-num">Recebido (R$)</th><th class="col-num">Repassado (R$)</th><th class="col-num">Saldo (R$)</th></tr></thead>' +
+      '<tbody>' +
+        orc.linhas.map(l => '<tr' + (l.nivel === 0 ? ' style="font-weight:700;background:var(--azul-claro,#EEF2FA)"' : '') + '>' +
+          '<td>' + (l.nivel ? '↳ ' : '') + (l.sigla ? '<strong>' + l.sigla + '</strong> — ' : '') + l.nome + '</td>' +
+          '<td class="col-num">' + formatMoeda(l.recebido) + '</td>' +
+          '<td class="col-num">' + formatMoeda(l.repassado) + '</td>' +
+          '<td class="col-num" style="font-weight:600;color:' + (l.saldo < 0 ? '#EF4444' : '#166534') + '">' + formatMoeda(l.saldo) + '</td>' +
+        '</tr>').join('') +
+      '</tbody></table></div>';
+
+    const grafico = orc.chart.length
+      ? '<div style="margin:6px 0 16px">' + barChartHTML(orc.chart, orc.total) + '</div>'
+      : '<p style="color:var(--cinza-medio);font-size:13px">Ainda não há distribuição de orçamento registrada para este exercício.</p>';
+
+    return '<div class="card" style="margin-bottom:16px">' +
+      '<div class="card-title">Distribuição do Orçamento</div>' +
+      '<p style="margin:0 0 14px;font-size:14px">Total da unidade ordenadora: <strong>' + formatMoeda(orc.total) + '</strong> · ' +
+        'Distribuído: <strong>' + formatMoeda(orc.totalDistribuido) + '</strong></p>' +
+      '<div style="font-size:12px;color:var(--cinza-medio);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Orçamento distribuído por seção</div>' +
+      grafico +
+      tabela +
+    '</div>';
+  }
+
   function renderResultado() {
-    if (_demandas.length === 0) {
-      resultado.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><h3>Nenhuma demanda homologada</h3><p>Não há demandas homologadas para este campus e exercício.</p></div>';
-      return;
+    let html = '';
+
+    // Cabeçalho do exercício
+    if (_orcamento || _demandas.length) {
+      const totalGeral = _demandas.reduce((s, d) => s + Number(d.valor_estimado || 0), 0);
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
+        '<h2 style="font-size:17px">' + _campusNome + ' — Exercício ' + _exercicio + '</h2>' +
+        '<span style="font-size:13px;color:var(--cinza-medio)">' + _demandas.length + ' demanda(s) homologada(s) · Total: ' + formatMoeda(totalGeral) + '</span>' +
+      '</div>';
     }
 
-    // Agrupar por unidade
-    const grupos = {};
-    _demandas.forEach(d => {
-      const key = d.unidade ? d.unidade.id : 'geral';
-      const nome = d.unidade ? d.unidade.nome : 'Sem unidade';
-      if (!grupos[key]) grupos[key] = { nome, demandas: [] };
-      grupos[key].demandas.push(d);
-    });
+    // 1) Distribuição do Orçamento
+    html += orcamentoCardHTML(_orcamento);
 
-    const totalGeral = _demandas.reduce((s,d) => s+Number(d.valor_estimado||0), 0);
+    // 2) Demandas homologadas, agrupadas por unidade
+    if (_demandas.length === 0) {
+      html += '<div class="empty-state"><div class="empty-icon">📋</div><h3>Nenhuma demanda homologada</h3><p>Não há demandas homologadas para este campus e exercício.</p></div>';
+    } else {
+      const grupos = {};
+      _demandas.forEach(d => {
+        const key = d.unidade ? d.unidade.id : 'geral';
+        const nome = d.unidade ? d.unidade.nome : 'Sem unidade';
+        if (!grupos[key]) grupos[key] = { nome, demandas: [] };
+        grupos[key].demandas.push(d);
+      });
 
-    let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <h2 style="font-size:17px">${_campusNome} — Exercício ${_exercicio}</h2>
-      <span style="font-size:13px;color:var(--cinza-medio)">${_demandas.length} demanda(s) · Total: ${formatMoeda(totalGeral)}</span>
-    </div>`;
-
-    Object.values(grupos).forEach(g => {
-      const subtotal = g.demandas.reduce((s,d) => s+Number(d.valor_estimado||0), 0);
-      html += `<div class="card" style="margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:12px">
-          <strong>${g.nome}</strong>
-          <span style="font-size:13px;color:var(--cinza-medio)">${g.demandas.length} item(s) · ${formatMoeda(subtotal)}</span>
-        </div>
-        <div class="table-wrap"><table>
-          <thead><tr>
-            <th>#</th><th>Objeto</th><th>Qtd</th><th>Un.</th>
-            <th class="col-num">Valor est.</th><th style="text-align:center">GUT</th>
-          </tr></thead>
-          <tbody>
-            ${g.demandas.map(d => `<tr>
-              <td style="color:var(--cinza-medio)">${d.gut_prioridade||'—'}</td>
-              <td title="${d.descricao_objeto}">${d.descricao_objeto.substring(0,70)}${d.descricao_objeto.length>70?'…':''}</td>
-              <td>${Number(d.quantidade).toLocaleString('pt-BR')}</td>
-              <td>${d.unidade_medida}</td>
-              <td class="col-num">${formatMoeda(d.valor_estimado)}</td>
-              <td style="text-align:center;font-weight:600;color:var(--dourado)">${d.gut_total||'—'}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table></div>
-      </div>`;
-    });
+      Object.values(grupos).forEach(g => {
+        const subtotal = g.demandas.reduce((s, d) => s + Number(d.valor_estimado || 0), 0);
+        html += '<div class="card" style="margin-bottom:12px">' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:12px">' +
+            '<strong>' + g.nome + '</strong>' +
+            '<span style="font-size:13px;color:var(--cinza-medio)">' + g.demandas.length + ' item(s) · ' + formatMoeda(subtotal) + '</span>' +
+          '</div>' +
+          '<div class="table-wrap"><table>' +
+            '<thead><tr><th>#</th><th>Objeto</th><th>Qtd</th><th>Un.</th><th class="col-num">Valor est.</th><th style="text-align:center">GUT</th></tr></thead>' +
+            '<tbody>' +
+              g.demandas.map(d => '<tr>' +
+                '<td style="color:var(--cinza-medio)">' + (d.gut_prioridade || '—') + '</td>' +
+                '<td title="' + (d.descricao_objeto || '') + '">' + d.descricao_objeto.substring(0, 70) + (d.descricao_objeto.length > 70 ? '…' : '') + '</td>' +
+                '<td>' + Number(d.quantidade).toLocaleString('pt-BR') + '</td>' +
+                '<td>' + d.unidade_medida + '</td>' +
+                '<td class="col-num">' + formatMoeda(d.valor_estimado) + '</td>' +
+                '<td style="text-align:center;font-weight:600;color:var(--dourado)">' + (d.gut_total || '—') + '</td>' +
+              '</tr>').join('') +
+            '</tbody>' +
+          '</table></div>' +
+        '</div>';
+      });
+    }
 
     resultado.innerHTML = html;
   }
 
   // ── Geração de PDF ─────────────────────────────────────────── //
   btnPdf.addEventListener('click', function () {
-    if (_demandas.length === 0) return;
+    if (_demandas.length === 0 && !_orcamento) return;
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
@@ -213,66 +312,98 @@
     doc.rect(0, 0, 297, 20, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(13);
-    doc.setFont('helvetica','bold');
+    doc.setFont('helvetica', 'bold');
     doc.text('Colégio Pedro II — Plano Anual de Contratações', 14, 9);
     doc.setFontSize(10);
-    doc.setFont('helvetica','normal');
+    doc.setFont('helvetica', 'normal');
     doc.text(titulo, 14, 15);
     doc.text('Gerado em: ' + agora, 297 - 14, 15, { align: 'right' });
 
-    // Agrupar por unidade
-    const grupos = {};
-    _demandas.forEach(d => {
-      const key = d.unidade ? d.unidade.id : 'geral';
-      const nome = d.unidade ? d.unidade.nome + ' (' + d.unidade.sigla + ')' : 'Sem unidade';
-      if (!grupos[key]) grupos[key] = { nome, demandas: [] };
-      grupos[key].demandas.push(d);
-    });
+    let startY = 28;
 
-    let startY = 26;
-
-    Object.values(grupos).forEach(g => {
+    // 1. Distribuição do Orçamento
+    if (_orcamento) {
       doc.setTextColor(26, 58, 107);
-      doc.setFontSize(10);
-      doc.setFont('helvetica','bold');
-      doc.text(g.nome, 14, startY);
-      startY += 2;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('1. Distribuição do Orçamento', 14, startY);
+      startY += 5;
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(40, 40, 40);
+      doc.text('Total da unidade ordenadora: ' + formatMoeda(_orcamento.total) +
+        '   |   Distribuído: ' + formatMoeda(_orcamento.totalDistribuido) +
+        '   |   Não distribuído: ' + formatMoeda(_orcamento.naoDistribuido), 14, startY);
+      startY += 3;
 
       doc.autoTable({
         startY,
         styles: { fontSize: 8, cellPadding: 2 },
         headStyles: { fillColor: [26, 58, 107], textColor: 255, fontStyle: 'bold' },
-        columnStyles: {
-          0: { cellWidth: 8, halign: 'center' },
-          4: { halign: 'right' },
-          5: { cellWidth: 18, halign: 'center' },
-        },
-        head: [['#','Objeto','Qtd','Un.','Valor estimado','GUT','Gestor Titular','Fiscal Titular']],
-        body: g.demandas.map(d => [
-          d.gut_prioridade || '—',
-          d.descricao_objeto.substring(0, 80),
-          Number(d.quantidade).toLocaleString('pt-BR'),
-          d.unidade_medida,
-          formatMoeda(d.valor_estimado),
-          d.gut_total || '—',
-          (d.gestor_titular_nome||'—') + '\nSIAPE: '+(d.gestor_titular_siape||'—'),
-          (d.fiscal_titular_nome||'—') + '\nSIAPE: '+(d.fiscal_titular_siape||'—'),
+        columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+        head: [['Unidade / Setor', 'Recebido (R$)', 'Repassado (R$)', 'Saldo (R$)']],
+        body: _orcamento.linhas.map(l => [
+          (l.nivel ? '   ' : '') + (l.sigla ? l.sigla + ' — ' : '') + l.nome,
+          formatMoeda(l.recebido), formatMoeda(l.repassado), formatMoeda(l.saldo)
         ]),
-        margin: { left: 14, right: 14 },
-        didDrawPage: function (data) { startY = data.cursor.y + 6; }
+        margin: { left: 14, right: 14 }
+      });
+      startY = doc.lastAutoTable.finalY + 10;
+    }
+
+    // 2. Demandas homologadas, agrupadas por unidade
+    if (_demandas.length) {
+      doc.setTextColor(26, 58, 107);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('2. Demandas Homologadas', 14, startY);
+      startY += 4;
+
+      const grupos = {};
+      _demandas.forEach(d => {
+        const key = d.unidade ? d.unidade.id : 'geral';
+        const nome = d.unidade ? d.unidade.nome + ' (' + d.unidade.sigla + ')' : 'Sem unidade';
+        if (!grupos[key]) grupos[key] = { nome, demandas: [] };
+        grupos[key].demandas.push(d);
       });
 
-      startY = doc.lastAutoTable.finalY + 8;
-    });
+      Object.values(grupos).forEach(g => {
+        doc.setTextColor(26, 58, 107);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(g.nome, 14, startY);
+        startY += 2;
 
-    // Rodapé com total
-    const total = _demandas.reduce((s,d) => s+Number(d.valor_estimado||0), 0);
-    doc.setTextColor(26, 58, 107);
-    doc.setFont('helvetica','bold');
-    doc.setFontSize(10);
-    doc.text('Total geral: ' + formatMoeda(total) + ' (' + _demandas.length + ' demanda(s))', 14, startY);
+        doc.autoTable({
+          startY,
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [26, 58, 107], textColor: 255, fontStyle: 'bold' },
+          columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 4: { halign: 'right' }, 5: { cellWidth: 18, halign: 'center' } },
+          head: [['#', 'Objeto', 'Qtd', 'Un.', 'Valor estimado', 'GUT', 'Gestor Titular', 'Fiscal Titular']],
+          body: g.demandas.map(d => [
+            d.gut_prioridade || '—',
+            d.descricao_objeto.substring(0, 80),
+            Number(d.quantidade).toLocaleString('pt-BR'),
+            d.unidade_medida,
+            formatMoeda(d.valor_estimado),
+            d.gut_total || '—',
+            (d.gestor_titular_nome || '—') + '\nSIAPE: ' + (d.gestor_titular_siape || '—'),
+            (d.fiscal_titular_nome || '—') + '\nSIAPE: ' + (d.fiscal_titular_siape || '—'),
+          ]),
+          margin: { left: 14, right: 14 }
+        });
 
-    doc.save('PAC_' + _campusNome.replace(/\s+/g,'_') + '_' + _exercicio + '.pdf');
+        startY = doc.lastAutoTable.finalY + 8;
+      });
+
+      const total = _demandas.reduce((s, d) => s + Number(d.valor_estimado || 0), 0);
+      doc.setTextColor(26, 58, 107);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('Total geral homologado: ' + formatMoeda(total) + ' (' + _demandas.length + ' demanda(s))', 14, startY);
+    }
+
+    doc.save('PAC_' + _campusNome.replace(/\s+/g, '_') + '_' + _exercicio + '.pdf');
   });
 })();
 </script>

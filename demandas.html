@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Demandas — PAC CPII</title>
-  <link rel="stylesheet" href="style.css?v=25">
+  <link rel="stylesheet" href="style.css?v=26">
 </head>
 <body>
 
@@ -224,9 +224,9 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="supabase.js?v=25"></script>
-<script src="ui.js?v=25"></script>
-<script src="auth.js?v=25"></script>
+<script src="supabase.js?v=26"></script>
+<script src="ui.js?v=26"></script>
+<script src="auth.js?v=26"></script>
 <script>
 (async function () {
   const perfil = await initAuth();
@@ -314,8 +314,11 @@
                <button class="btn btn-sm btn-danger" onclick="confirmarExcluir('${d.id}')">Excluir</button>` :
               `<button class="btn btn-sm btn-secondary" onclick="verDetalhes('${d.id}')">Ver</button>`
             }
+            ${d.status === 'reprovada' ?
+              `<button class="btn btn-sm btn-warning" title="Ver motivo da reprovação" onclick="verMotivo('${d.id}')">⚠ Motivo</button>` : ''
+            }
             ${d.status === 'reprovada' && d.criado_por === perfil.id ?
-              `<button class="btn btn-sm btn-warning" onclick="editarDemanda('${d.id}')">Reenviar</button>` : ''
+              `<button class="btn btn-sm btn-secondary" onclick="editarDemanda('${d.id}')">Reenviar</button>` : ''
             }
           </td>
         </tr>`).join('');
@@ -380,6 +383,25 @@
     document.getElementById('btn-salvar-rascunho').style.display = 'none';
     document.getElementById('btn-enviar').style.display = 'none';
     document.getElementById('titulo-form').textContent = 'Visualizar demanda';
+  };
+
+  window.verMotivo = async function (id) {
+    try {
+      const hist = await listarHistorico(id);
+      const rep = hist.filter(h => h.acao === 'reprovacao').pop();
+      const motivo = rep && rep.justificativa ? rep.justificativa : 'Motivo não informado.';
+      const quem = rep && rep.usuario ? rep.usuario.nome : '—';
+      const data = rep ? formatDataHora(rep.criado_em) : '';
+      showModal({
+        titulo: 'Motivo da reprovação',
+        mensagem: '<strong>Justificativa:</strong><br>' + motivo +
+          '<br><br><span style="color:var(--cinza-medio);font-size:13px">Reprovada por: ' + quem + (data ? (' · ' + data) : '') + '</span>',
+        confirmLabel: 'Fechar', confirmClass: 'btn-primary',
+        onConfirm: function () {}
+      });
+    } catch (err) {
+      showToast('Erro ao carregar o motivo: ' + (err.message || err), 'error');
+    }
   };
 
   window.confirmarExcluir = function (id) {

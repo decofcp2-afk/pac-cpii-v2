@@ -421,3 +421,14 @@ async function listarExerciciosPublicos(campusId) {
   const anos = [...new Set(data.map(function (d) { return d.exercicio; }))].sort(function (a, b) { return b - a; });
   return anos;
 }
+
+/* Orçamento público (transparência) — requer leitura anônima de dotacoes/distribuicoes */
+async function listarDotacoesPublico(campusId, exercicio) {
+  let q = db.from('dotacoes').select('id,valor_total,descricao,exercicio,campus_id').eq('campus_id', campusId);
+  if (exercicio) q = q.eq('exercicio', exercicio);
+  return _check(await q);
+}
+
+async function listarDistribuicoesPublico(dotacaoId) {
+  return _check(await db.from('distribuicoes').select('valor,unidade_id').eq('dotacao_id', dotacaoId));
+}
