@@ -10,7 +10,7 @@
 
 <!-- Cabeçalho público -->
 <header class="publico-header">
-  <div style="width:48px;height:48px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px">CP</div>
+  <img src="logo-cpii.jpg" alt="Colégio Pedro II" style="width:52px;height:52px;border-radius:50%;background:#fff;object-fit:contain;padding:3px">
   <div>
     <h1>Plano Anual de Contratações</h1>
     <p>Colégio Pedro II — Consulta Pública</p>
@@ -299,7 +299,20 @@
   }
 
   // ── Geração de PDF ─────────────────────────────────────────── //
-  btnPdf.addEventListener('click', function () {
+  // Pré-carrega o brasão para usar no PDF (mesma origem, sem CORS)
+  let _logoImg = null;
+  function carregarLogo() {
+    return new Promise(function (resolve) {
+      if (_logoImg) return resolve(_logoImg);
+      const img = new Image();
+      img.onload = function () { _logoImg = img; resolve(img); };
+      img.onerror = function () { resolve(null); };
+      img.src = 'logo-cpii.jpg';
+    });
+  }
+  carregarLogo();
+
+  btnPdf.addEventListener('click', async function () {
     if (_demandas.length === 0 && !_orcamento) return;
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -309,17 +322,26 @@
 
     // Cabeçalho
     doc.setFillColor(26, 58, 107);
-    doc.rect(0, 0, 297, 20, 'F');
+    doc.rect(0, 0, 297, 22, 'F');
+    // Brasão do Colégio Pedro II (canto superior esquerdo)
+    try {
+      const logo = await carregarLogo();
+      if (logo) {
+        doc.setFillColor(255, 255, 255);
+        doc.circle(15, 11, 9, 'F');
+        doc.addImage(logo, 'JPEG', 8, 4, 14, 14);
+      }
+    } catch (e) {}
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
-    doc.text('Colégio Pedro II — Plano Anual de Contratações', 14, 9);
+    doc.text('Colégio Pedro II — Plano Anual de Contratações', 30, 10);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(titulo, 14, 15);
-    doc.text('Gerado em: ' + agora, 297 - 14, 15, { align: 'right' });
+    doc.text(titulo, 30, 16);
+    doc.text('Gerado em: ' + agora, 297 - 14, 16, { align: 'right' });
 
-    let startY = 28;
+    let startY = 30;
 
     // 1. Distribuição do Orçamento
     if (_orcamento) {
