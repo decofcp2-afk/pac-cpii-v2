@@ -258,20 +258,21 @@ const PAPEL_LABELS = {
         }
 
         // Inserir perfil na tabela usuarios
+        // OBS: a tabela 'usuarios' NÃO possui coluna 'email' (o e-mail fica em auth.users)
         const { error: insertError } = await db.from('usuarios').insert({
           id: novoId,
           nome,
-          email,
           papel,
           unidade_id: unidade || null,
           campus_id: perfil.campus_id,
-          ativo: true,
+          ativo,
           primeiro_acesso: true
         });
         if (insertError) throw insertError;
 
-        showToast('Usuário criado com sucesso.', 'success');
-        fecharModal('modal-usuario');
+        showToast('Usuário criado com sucesso. Troca de senha obrigatória no 1º acesso.', 'success');
+        document.getElementById('view-form').style.display = 'none';
+        document.getElementById('view-lista').style.display = '';
         carregarUsuarios();
       }
     } catch (err) {

@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AdministraÃ§Ã£o â PAC CPII</title>
+  <title>Administração — PAC CPII</title>
   <link rel="stylesheet" href="style.css?v=24">
 </head>
 <body>
 
 <header id="app-header">
   <div class="header-left">
-    <button id="btn-menu-mobile">â°</button>
+    <button id="btn-menu-mobile">☰</button>
     <div style="width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">CP</div>
-    <div class="header-title">PAC â ColÃ©gio Pedro II<small>AdministraÃ§Ã£o Global</small></div>
+    <div class="header-title">PAC — Colégio Pedro II<small>Administração Global</small></div>
   </div>
   <div class="header-right">
     <span id="header-nome"></span>
@@ -22,7 +22,7 @@
 
 <main id="app-main" style="margin-left:0">
   <div class="page-header">
-    <div><h1>AdministraÃ§Ã£o</h1><p>GestÃ£o global de campi, unidades e usuÃ¡rios</p></div>
+    <div><h1>Administração</h1><p>Gestão global de campi, unidades e usuários</p></div>
   </div>
 
   <!-- Campi -->
@@ -33,7 +33,7 @@
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Nome</th><th>Sigla</th><th>Unidades</th><th class="col-actions">AÃ§Ãµes</th></tr></thead>
+        <thead><tr><th>Nome</th><th>Sigla</th><th>Unidades</th><th class="col-actions">Ações</th></tr></thead>
         <tbody id="tbody-campi">
           <tr><td colspan="4"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>
         </tbody>
@@ -44,22 +44,22 @@
   <!-- Unidades do campus selecionado -->
   <div class="card" id="card-unidades" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <div class="card-title" style="margin-bottom:0">Unidades â <span id="campus-selecionado-nome"></span></div>
+      <div class="card-title" style="margin-bottom:0">Unidades — <span id="campus-selecionado-nome"></span></div>
       <button class="btn btn-primary btn-sm" id="btn-nova-unidade">+ Nova unidade</button>
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Nome</th><th>Sigla</th><th>Tipo</th><th>Unidade pai</th><th class="col-actions">AÃ§Ãµes</th></tr></thead>
+        <thead><tr><th>Nome</th><th>Sigla</th><th>Tipo</th><th>Unidade pai</th><th class="col-actions">Ações</th></tr></thead>
         <tbody id="tbody-unidades"></tbody>
       </table>
     </div>
   </div>
 
-  <!-- UsuÃ¡rios do campus selecionado -->
+  <!-- Usuários do campus selecionado -->
   <div class="card" id="card-usuarios-admin" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <div class="card-title" style="margin-bottom:0">UsuÃ¡rios do campus</div>
-      <button class="btn btn-primary btn-sm" id="btn-novo-usuario-admin">+ Novo usuÃ¡rio</button>
+      <div class="card-title" style="margin-bottom:0">Usuários do campus</div>
+      <button class="btn btn-primary btn-sm" id="btn-novo-usuario-admin">+ Novo usuário</button>
     </div>
     <div id="lista-usuarios-admin"></div>
   </div>
@@ -72,7 +72,7 @@
       <h2 id="mc-titulo">Novo campus</h2>
       <div class="form-group" style="margin-bottom:12px">
         <label>Nome <span style="color:#EF4444">*</span></label>
-        <input type="text" id="mc-nome" placeholder="Ex: Campus HumaitÃ¡ II">
+        <input type="text" id="mc-nome" placeholder="Ex: Campus Humaitá II">
         <span class="field-error" id="mc-nome-err" style="display:none"></span>
       </div>
       <div class="form-group" style="margin-bottom:12px">
@@ -107,18 +107,63 @@
         <label>Tipo <span style="color:#EF4444">*</span></label>
         <select id="mu-tipo">
           <option value="campus">Campus (raiz)</option>
-          <option value="pro_reitoria">PrÃ³-Reitoria</option>
+          <option value="pro_reitoria">Pró-Reitoria</option>
           <option value="diretoria">Diretoria</option>
-          <option value="secao">SeÃ§Ã£o</option>
+          <option value="secao">Seção</option>
         </select>
       </div>
       <div class="form-group" style="margin-bottom:12px">
         <label>Unidade pai</label>
-        <select id="mu-parent"><option value="">â Raiz do campus â</option></select>
+        <select id="mu-parent"><option value="">— Raiz do campus —</option></select>
       </div>
       <div class="modal-actions">
         <button class="btn btn-secondary" id="mu-cancelar">Cancelar</button>
         <button class="btn btn-primary" id="mu-salvar">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal usuário (admin) -->
+<div id="modal-usuario-admin" style="display:none">
+  <div class="modal-backdrop">
+    <div class="modal">
+      <h2>Novo usuário — <span id="mua-campus-nome"></span></h2>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Nome completo <span style="color:#EF4444">*</span></label>
+        <input type="text" id="mua-nome">
+        <span class="field-error" id="mua-nome-err" style="display:none"></span>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>E-mail <span style="color:#EF4444">*</span></label>
+        <input type="email" id="mua-email" placeholder="usuario@cp2.g12.br">
+        <span class="field-error" id="mua-email-err" style="display:none"></span>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Unidade</label>
+        <select id="mua-unidade"><option value="">— Sem unidade (nível campus) —</option></select>
+        <span class="hint">Obrigatória para Chefe de Seção. Chefia / Ordenador / Licitações podem ficar sem unidade.</span>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Papel <span style="color:#EF4444">*</span></label>
+        <select id="mua-papel">
+          <option value="">Selecione…</option>
+          <option value="licitacoes">Licitações (gestor do campus)</option>
+          <option value="ord_despesas">Ordenador de Despesas</option>
+          <option value="chefia">Chefia</option>
+          <option value="chefe_secao">Chefe de Seção</option>
+        </select>
+        <span class="field-error" id="mua-papel-err" style="display:none"></span>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Senha inicial <span style="color:#EF4444">*</span></label>
+        <input type="password" id="mua-senha" placeholder="Mín. 8 chars, 1 maiúscula, 1 número">
+        <span class="hint">O usuário será obrigado a trocá-la no primeiro acesso.</span>
+        <span class="field-error" id="mua-senha-err" style="display:none"></span>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="mua-cancelar">Cancelar</button>
+        <button class="btn btn-primary" id="mua-salvar">Criar usuário</button>
       </div>
     </div>
   </div>
@@ -129,7 +174,7 @@
 <script src="ui.js?v=24"></script>
 <script src="auth.js?v=24"></script>
 <script>
-const TIPO_LABELS = { campus:'Campus', pro_reitoria:'PrÃ³-Reitoria', diretoria:'Diretoria', secao:'SeÃ§Ã£o' };
+const TIPO_LABELS = { campus:'Campus', pro_reitoria:'Pró-Reitoria', diretoria:'Diretoria', secao:'Seção' };
 
 (async function () {
   const perfil = await initAuth(['administrador']);
@@ -141,7 +186,7 @@ const TIPO_LABELS = { campus:'Campus', pro_reitoria:'PrÃ³-Reitoria', diretoria
   let _campusSelecionado = null;
   let _unidades = [];
 
-  // ââ Campi ââââââââââââââââââââââââââââââââââââââââââââââââââ //
+  // ── Campi ────────────────────────────────────────────────── //
   async function carregarCampi() {
     const tbody = document.getElementById('tbody-campi');
     tbody.innerHTML = '<tr><td colspan="4"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>';
@@ -154,7 +199,7 @@ const TIPO_LABELS = { campus:'Campus', pro_reitoria:'PrÃ³-Reitoria', diretoria
       tbody.innerHTML = campi.map(c => `<tr>
         <td>${c.nome}</td><td>${c.sigla}</td><td>${unidadeCounts[c.id] || 0}</td>
         <td class="col-actions">
-          <button class="btn btn-sm btn-secondary" onclick="selecionarCampus('${c.id}','${c.nome}')">Gerenciar</button>
+          <button class="btn btn-sm btn-secondary" onclick="selecionarCampus('${c.id}','${String(c.nome).replace(/'/g,"\\'")}')">Gerenciar</button>
         </td>
       </tr>`).join('');
     } catch (err) { showToast('Erro: '+err.message,'error'); }
@@ -183,8 +228,8 @@ const TIPO_LABELS = { campus:'Campus', pro_reitoria:'PrÃ³-Reitoria', diretoria
     const nome  = document.getElementById('mc-nome').value.trim();
     const sigla = document.getElementById('mc-sigla').value.trim().toUpperCase();
     let ok = true;
-    if (!nome)  { document.getElementById('mc-nome-err').textContent='Campo obrigatÃ³rio.'; document.getElementById('mc-nome-err').style.display=''; ok=false; }
-    if (!sigla) { document.getElementById('mc-sigla-err').textContent='Campo obrigatÃ³rio.'; document.getElementById('mc-sigla-err').style.display=''; ok=false; }
+    if (!nome)  { document.getElementById('mc-nome-err').textContent='Campo obrigatório.'; document.getElementById('mc-nome-err').style.display=''; ok=false; }
+    if (!sigla) { document.getElementById('mc-sigla-err').textContent='Campo obrigatório.'; document.getElementById('mc-sigla-err').style.display=''; ok=false; }
     if (!ok) return;
     setLoading(this, true);
     try {
@@ -196,7 +241,7 @@ const TIPO_LABELS = { campus:'Campus', pro_reitoria:'PrÃ³-Reitoria', diretoria
     finally { setLoading(this, false); }
   });
 
-  // ââ Unidades âââââââââââââââââââââââââââââââââââââââââââââââ //
+  // ── Unidades ─────────────────────────────────────────────── //
   async function carregarUnidades() {
     if (!_campusSelecionado) return;
     const tbody = document.getElementById('tbody-unidades');
@@ -204,7 +249,7 @@ const TIPO_LABELS = { campus:'Campus', pro_reitoria:'PrÃ³-Reitoria', diretoria
     try {
       _unidades = await listarUnidadesDoCampus(_campusSelecionado);
       const parentSel = document.getElementById('mu-parent');
-      parentSel.innerHTML = '<option value="">â Raiz do campus â</option>' +
+      parentSel.innerHTML = '<option value="">— Raiz do campus —</option>' +
         _unidades.map(u => `<option value="${u.id}">${u.nome} (${u.sigla})</option>`).join('');
 
       if (_unidades.length === 0) {
@@ -214,7 +259,7 @@ const TIPO_LABELS = { campus:'Campus', pro_reitoria:'PrÃ³-Reitoria', diretoria
       tbody.innerHTML = _unidades.map(u => `<tr>
         <td>${u.nome}</td><td>${u.sigla}</td>
         <td>${TIPO_LABELS[u.tipo]||u.tipo}</td>
-        <td>${u.parent ? u.parent.sigla : 'â'}</td>
+        <td>${u.parent ? u.parent.sigla : '—'}</td>
         <td class="col-actions">
           <button class="btn btn-sm btn-secondary" onclick="editarUnidade('${u.id}')">Editar</button>
         </td>
@@ -256,8 +301,8 @@ const TIPO_LABELS = { campus:'Campus', pro_reitoria:'PrÃ³-Reitoria', diretoria
     const parent = document.getElementById('mu-parent').value || null;
     const editId = document.getElementById('modal-unidade').dataset.editId;
     let ok = true;
-    if (!nome)  { document.getElementById('mu-nome-err').textContent='Campo obrigatÃ³rio.'; document.getElementById('mu-nome-err').style.display=''; ok=false; }
-    if (!sigla) { document.getElementById('mu-sigla-err').textContent='Campo obrigatÃ³rio.'; document.getElementById('mu-sigla-err').style.display=''; ok=false; }
+    if (!nome)  { document.getElementById('mu-nome-err').textContent='Campo obrigatório.'; document.getElementById('mu-nome-err').style.display=''; ok=false; }
+    if (!sigla) { document.getElementById('mu-sigla-err').textContent='Campo obrigatório.'; document.getElementById('mu-sigla-err').style.display=''; ok=false; }
     if (!ok) return;
     setLoading(this, true);
     try {
@@ -273,7 +318,7 @@ const TIPO_LABELS = { campus:'Campus', pro_reitoria:'PrÃ³-Reitoria', diretoria
     finally { setLoading(this, false); }
   });
 
-  // ââ UsuÃ¡rios do campus âââââââââââââââââââââââââââââââââââââ //
+  // ── Usuários do campus ───────────────────────────────────── //
   async function carregarUsuariosAdmin() {
     if (!_campusSelecionado) return;
     const el = document.getElementById('lista-usuarios-admin');
@@ -281,24 +326,95 @@ const TIPO_LABELS = { campus:'Campus', pro_reitoria:'PrÃ³-Reitoria', diretoria
     try {
       const users = await listarUsuariosDoCampus(_campusSelecionado);
       if (users.length === 0) {
-        el.innerHTML = '<div class="empty-state"><p>Nenhum usuÃ¡rio neste campus.</p></div>';
+        el.innerHTML = '<div class="empty-state"><p>Nenhum usuário neste campus.</p></div>';
         return;
       }
       el.innerHTML = `<div class="table-wrap"><table>
         <thead><tr><th>Nome</th><th>Unidade</th><th>Papel</th><th>Status</th></tr></thead>
         <tbody>${users.map(u => `<tr>
           <td>${u.nome}</td>
-          <td>${u.unidade?u.unidade.sigla:'â'}</td>
-          <td>${{administrador:'Admin',ord_despesas:'Ordenador',chefia:'Chefia',chefe_secao:'Chefe de SeÃ§Ã£o',licitacoes:'LicitaÃ§Ãµes'}[u.papel]||u.papel}</td>
+          <td>${u.unidade?u.unidade.sigla:'—'}</td>
+          <td>${{administrador:'Admin',ord_despesas:'Ordenador',chefia:'Chefia',chefe_secao:'Chefe de Seção',licitacoes:'Licitações'}[u.papel]||u.papel}</td>
           <td><span class="badge ${u.ativo?'badge-de_acordo':'badge-reprovada'}">${u.ativo?'Ativo':'Inativo'}</span></td>
         </tr>`).join('')}</tbody>
       </table></div>`;
     } catch (err) { el.innerHTML = '<div class="alert alert-danger">Erro ao carregar.</div>'; }
   }
 
+  // ── Criação de usuário (admin, no campus selecionado) ────── //
   document.getElementById('btn-novo-usuario-admin').addEventListener('click', function () {
     if (!_campusSelecionado) { showToast('Selecione um campus primeiro.','error'); return; }
-    showToast('Para criar usuÃ¡rios de um campus, acesse a tela UsuÃ¡rios.', 'info');
+    document.getElementById('mua-campus-nome').textContent =
+      document.getElementById('campus-selecionado-nome').textContent;
+    document.getElementById('mua-nome').value = '';
+    document.getElementById('mua-email').value = '';
+    document.getElementById('mua-senha').value = '';
+    document.getElementById('mua-papel').value = '';
+    const selU = document.getElementById('mua-unidade');
+    selU.innerHTML = '<option value="">— Sem unidade (nível campus) —</option>' +
+      _unidades.map(u => `<option value="${u.id}">${u.nome} (${u.sigla})</option>`).join('');
+    document.querySelectorAll('#modal-usuario-admin .field-error').forEach(el => el.style.display='none');
+    document.getElementById('modal-usuario-admin').style.display = '';
+  });
+
+  document.getElementById('mua-cancelar').addEventListener('click', function () {
+    document.getElementById('modal-usuario-admin').style.display = 'none';
+  });
+
+  document.getElementById('mua-salvar').addEventListener('click', async function () {
+    const nome    = document.getElementById('mua-nome').value.trim();
+    const email   = document.getElementById('mua-email').value.trim();
+    const unidade = document.getElementById('mua-unidade').value || null;
+    const papel   = document.getElementById('mua-papel').value;
+    const senha   = document.getElementById('mua-senha').value;
+
+    let ok = true;
+    function err(id, msg) { const el=document.getElementById(id+'-err'); if(el){el.textContent=msg;el.style.display=msg?'':'none';} if(msg) ok=false; }
+    if (!nome)  err('mua-nome','Campo obrigatório.'); else err('mua-nome','');
+    if (!email) err('mua-email','Campo obrigatório.'); else err('mua-email','');
+    if (!papel) err('mua-papel','Selecione o papel.'); else err('mua-papel','');
+    if (papel === 'chefe_secao' && !unidade) err('mua-papel','Chefe de Seção exige uma unidade.');
+    if (!senha || senha.length < 8 || !/[A-Z]/.test(senha) || !/[0-9]/.test(senha))
+      err('mua-senha','Mín. 8 chars, 1 maiúscula, 1 número.'); else err('mua-senha','');
+    if (!ok) return;
+
+    setLoading(this, true);
+    try {
+      // Preservar sessão do admin (signUp troca a sessão no browser)
+      const { data: { session: sessaoAtual } } = await db.auth.getSession();
+
+      const { data: signUpData, error: signUpError } = await db.auth.signUp({ email, password: senha });
+      if (signUpError) throw signUpError;
+      const novoId = signUpData.user.id;
+
+      // Restaurar a sessão do admin antes de inserir o perfil
+      if (sessaoAtual) {
+        await db.auth.setSession({
+          access_token:  sessaoAtual.access_token,
+          refresh_token: sessaoAtual.refresh_token
+        });
+      }
+
+      // A tabela 'usuarios' NÃO possui coluna 'email' (o e-mail fica em auth.users)
+      const { error: insertError } = await db.from('usuarios').insert({
+        id: novoId,
+        nome,
+        papel,
+        unidade_id: unidade,
+        campus_id: _campusSelecionado,
+        ativo: true,
+        primeiro_acesso: true
+      });
+      if (insertError) throw insertError;
+
+      showToast('Usuário criado. Senha inicial definida; troca obrigatória no 1º acesso.', 'success');
+      document.getElementById('modal-usuario-admin').style.display = 'none';
+      carregarUsuariosAdmin();
+    } catch (err2) {
+      showToast('Erro: ' + (err2.message || err2), 'error');
+    } finally {
+      setLoading(this, false);
+    }
   });
 
   carregarCampi();
