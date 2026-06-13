@@ -91,11 +91,21 @@ async function contarUnidadesPorCampus() {
  * Schema: id, campus_id, parent_id, nome, sigla, tipo, criado_em
  */
 async function listarUnidadesDoCampus(campusId) {
-  return _check(await db
+  // Resolvemos o "pai" em JS. O embed PostgREST (unidades!parent_id) numa
+  // auto-relação retorna a direção inversa (filhos), o que quebrava a coluna
+  // "Unidade pai". Aqui mapeamos por id e anexamos o objeto pai correto.
+  const data = await _check(await db
     .from('unidades')
-    .select('*, parent:unidades!parent_id(id,nome,sigla)')
+    .select('*')
     .eq('campus_id', campusId)
     .order('nome'));
+  const porId = {};
+  data.forEach(function (u) { porId[u.id] = u; });
+  data.forEach(function (u) {
+    const pai = u.parent_id ? porId[u.parent_id] : null;
+    u.parent = pai ? { id: pai.id, nome: pai.nome, sigla: pai.sigla } : null;
+  });
+  return data;
 }
 
 async function criarUnidade(dados) {

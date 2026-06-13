@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Login â PAC CPII</title>
+  <title>Login — PAC CPII</title>
   <link rel="stylesheet" href="style.css?v=24">
 </head>
 <body class="login-page">
 
 <div class="login-box">
   <div class="login-logo">
-    <!-- Substitua o src pelo caminho real do brasÃ£o do CPII -->
+    <!-- Substitua o src pelo caminho real do brasão do CPII -->
     <div style="width:64px;height:64px;background:var(--azul);border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;font-weight:700">CP</div>
   </div>
-  <h1>PAC â ColÃ©gio Pedro II</h1>
-  <p class="subtitle">Plano Anual de ContrataÃ§Ãµes</p>
+  <h1>PAC — Colégio Pedro II</h1>
+  <p class="subtitle">Plano Anual de Contratações</p>
 
   <div id="alerta-erro" class="alert alert-danger" style="display:none"></div>
 
@@ -31,7 +31,7 @@
         <input type="password" id="senha" placeholder="Sua senha" autocomplete="current-password" required style="padding-right:44px">
         <button type="button" id="btn-toggle-senha" title="Mostrar/ocultar senha"
           style="position:absolute;right:0;top:0;bottom:0;width:40px;background:none;border:none;cursor:pointer;color:var(--cinza-medio);display:flex;align-items:center;justify-content:center;font-size:18px">
-          ð
+          👁
         </button>
       </div>
       <span class="field-error" id="senha-err" style="display:none"></span>
@@ -49,7 +49,7 @@
 <div id="modal-recuperar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:10px;padding:32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2)">
     <h3 style="margin:0 0 8px;font-size:18px;color:var(--azul)">Recuperar senha</h3>
-    <p style="margin:0 0 20px;font-size:14px;color:#666">Informe seu e-mail institucional. Se ele estiver cadastrado, vocÃ  receberÃ¡ um link para redefinir a senha.</p>
+    <p style="margin:0 0 20px;font-size:14px;color:#666">Informe seu e-mail institucional. Se ele estiver cadastrado, você receberá um link para redefinir a senha.</p>
     <div id="modal-msg" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:6px;font-size:14px"></div>
     <input type="email" id="email-recuperar" placeholder="seu@email.gov.br"
       style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;box-sizing:border-box;margin-bottom:16px">
@@ -66,7 +66,7 @@
 <script src="auth.js?v=24"></script>
 <script>
 (async function () {
-  // Se jÃ¡ tem sessÃ£o vÃ¡lida, redirecionar
+  // Se já tem sessão válida, redirecionar
   const session = await getSession();
   if (session) {
     const perfil = await getMeuPerfil();
@@ -81,7 +81,7 @@
   const params = new URLSearchParams(location.search);
   if (params.get('erro') === 'inativo') {
     const al = document.getElementById('alerta-erro');
-    al.textContent = 'Sua conta estÃ¡ inativa. Contate o administrador.';
+    al.textContent = 'Sua conta está inativa. Contate o administrador.';
     al.style.display = '';
   }
 
@@ -106,7 +106,7 @@
       const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
       if (error) throw error;
 
-      // Token salvo em localStorage pelo Supabase â buscar perfil
+      // Token salvo em localStorage pelo Supabase — buscar perfil
       const { data: rows } = await db.from('usuarios')
         .select('*,campus:campi(*),unidade:unidades(*)')
         .eq('id', data.user.id)
