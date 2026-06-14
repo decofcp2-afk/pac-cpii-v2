@@ -72,6 +72,17 @@
     </div>
     <div id="alerta-reprovacao" class="alert alert-danger" style="display:none"></div>
 
+    <div id="painel-orcamento" class="card" style="display:none;background:var(--azul-claro)">
+      <div class="card-title">Orçamento da unidade</div>
+      <div style="display:flex;gap:28px;flex-wrap:wrap;font-size:13px">
+        <div>Saldo inicial<br><strong id="po-inicial" style="font-size:18px">—</strong></div>
+        <div>Utilizado em demandas<br><strong id="po-utilizado" style="font-size:18px">—</strong></div>
+        <div>Saldo disponível<br><strong id="po-disponivel" style="font-size:18px">—</strong></div>
+        <div>Saldo após esta demanda<br><strong id="po-apos" style="font-size:18px">—</strong></div>
+      </div>
+      <p id="po-obs" style="color:var(--cinza-medio);font-size:12px;margin:10px 0 0"></p>
+    </div>
+
     <form id="form-demanda" novalidate>
       <div class="card">
         <div class="form-section-title">Identificação da demanda</div>
@@ -239,6 +250,7 @@
   const podeVerTudo = ['ord_despesas','licitacoes','administrador'].includes(perfil.papel);
   let demandaEditandoId = null;
   let exercicioAtual = new Date().getFullYear();
+  let _orc = { carregado:false, recebido:0, distribuido:0, utilizadoTotal:0, disponivelGeral:0, disponivelParaEsta:0 };
 
   // Seletor de exercício
   const selEx = document.getElementById('sel-exercicio');
@@ -262,6 +274,7 @@
   const objInput = document.getElementById('f-objeto');
   const objCount = document.getElementById('f-objeto-count');
   objInput.addEventListener('input', function () { objCount.textContent = objInput.value.length + '/300'; });
+  document.getElementById('f-valor').addEventListener('input', atualizarApos);
 
   // Contrato toggle
   document.getElementById('f-possui-contrato').addEventListener('change', function () {
@@ -315,6 +328,9 @@
                <button class="btn btn-sm btn-danger" onclick="confirmarExcluir('${d.id}')">Excluir</button>` :
               `<button class="btn btn-sm btn-secondary" onclick="verDetalhes('${d.id}')">Ver</button>`
             }
+            ${d.status === 'submetida' && d.criado_por === perfil.id ?
+              `<button class="btn btn-sm btn-warning" title="Voltar para rascunho" onclick="reverterRascunho('${d.id}')">↩ Reverter p/ rascunho</button>` : ''
+            }
             ${d.status === 'reprovada' ?
               `<button class="btn btn-sm btn-warning" title="Ver motivo da reprovação" onclick="verMotivo('${d.id}')">⚠ Motivo</button>` : ''
             }
@@ -342,10 +358,64 @@
     carregarLista();
   }
 
+  // Calcula e exibe o orçamento disponível da unidade (recebido − distribuído aos filhos − demandas)
+  async function carregarOrcamentoUnidade(exercicio) {
+    const painel = document.getElementById('painel-orcamento');
+    if (!perfil.unidade_id) { painel.style.display = 'none'; _orc.carregado = false; return; }
+    try {
+      const [dists, filhos, demandas] = await Promise.all([
+        listarDistribuicoes(perfil.campus_id, exercicio),
+        listarFilhosDiretos(perfil.unidade_id),
+        listarDemandasDaUnidade(perfil.unidade_id, exercicio)
+      ]);
+      const childIds = (filhos || []).map(function (f) { return f.id; });
+      const recebido = (dists || []).filter(function (x) { return x.unidade_id === perfil.unidade_id; })
+        .reduce(function (s, x) { return s + Number(x.valor); }, 0);
+      const distribuido = (dists || []).filter(function (x) { return childIds.indexOf(x.unidade_id) !== -1; })
+        .reduce(function (s, x) { return s + Number(x.valor); }, 0);
+      const ativas = (demandas || []).filter(function (d) { return d.status !== 'reprovada'; });
+      const utilizadoTotal = ativas.reduce(function (s, d) { return s + Number(d.valor_estimado || 0); }, 0);
+      const disponivelGeral = recebido - distribuido - utilizadoTotal;
+      let valorEditada = 0;
+      if (demandaEditandoId) {
+        const ed = ativas.find(function (d) { return d.id === demandaEditandoId; });
+        if (ed) valorEditada = Number(ed.valor_estimado || 0);
+      }
+      _orc = {
+        carregado: true, recebido: recebido, distribuido: distribuido,
+        utilizadoTotal: utilizadoTotal, disponivelGeral: disponivelGeral,
+        disponivelParaEsta: disponivelGeral + valorEditada
+      };
+      document.getElementById('po-inicial').textContent = formatMoeda(recebido);
+      document.getElementById('po-utilizado').textContent = formatMoeda(utilizadoTotal);
+      const elDisp = document.getElementById('po-disponivel');
+      elDisp.textContent = formatMoeda(disponivelGeral);
+      elDisp.style.color = disponivelGeral < 0 ? '#EF4444' : '#166534';
+      document.getElementById('po-obs').textContent = distribuido > 0
+        ? ('Obs.: ' + formatMoeda(distribuido) + ' já distribuído às unidades filhas também sai do orçamento da unidade.')
+        : '';
+      painel.style.display = '';
+      atualizarApos();
+    } catch (e) {
+      painel.style.display = 'none';
+      _orc.carregado = false;
+    }
+  }
+
+  function atualizarApos() {
+    if (!_orc.carregado) return;
+    const v = parseFloat(document.getElementById('f-valor').value) || 0;
+    const apos = _orc.disponivelParaEsta - v;
+    const el = document.getElementById('po-apos');
+    el.textContent = formatMoeda(apos);
+    el.style.color = apos < 0 ? '#EF4444' : '#166534';
+  }
+
   async function mostrarForm(id) {
     document.getElementById('view-lista').style.display = 'none';
     document.getElementById('view-form').style.display = '';
     limparForm();
+    demandaEditandoId = id || null;
 
     // Verificar se há dotação para o exercício (RN01)
     try {
@@ -353,8 +423,10 @@
       document.getElementById('alerta-orcamento').style.display = dots.length === 0 ? '' : 'none';
     } catch {}
 
+    // Carregar e exibir o orçamento disponível da unidade
+    await carregarOrcamentoUnidade(exercicioAtual);
+
     if (id) {
-      demandaEditandoId = id;
       document.getElementById('titulo-form').textContent = 'Editar demanda';
       const d = await getDemanda(id);
       preencherForm(d);
@@ -371,6 +443,7 @@
     } else {
       document.getElementById('titulo-form').textContent = 'Nova demanda';
     }
+    atualizarApos();
   }
 
   window.mostrarForm   = mostrarForm;
@@ -403,6 +476,23 @@
     } catch (err) {
       showToast('Erro ao carregar o motivo: ' + (err.message || err), 'error');
     }
+  };
+
+  window.reverterRascunho = function (id) {
+    showModal({
+      titulo: 'Reverter para rascunho',
+      mensagem: 'A demanda voltará para rascunho e sairá da fila de aprovação. Depois você poderá editá-la ou excluí-la. Continuar?',
+      confirmLabel: 'Reverter', confirmClass: 'btn-warning',
+      onConfirm: async function () {
+        try {
+          await reverterDemanda(id, 'rascunho', perfil.id, 'Revertida para rascunho pelo autor.');
+          showToast('Demanda revertida para rascunho.', 'success');
+          carregarLista();
+        } catch (err) {
+          showToast('Erro ao reverter: ' + (err.message || err), 'error');
+        }
+      }
+    });
   };
 
   window.confirmarExcluir = function (id) {
@@ -526,6 +616,13 @@
     if (!validarForm()) return;
     const dados = coletarForm();
     dados.status = status;
+
+    // Limite: a demanda não pode exceder o orçamento disponível da unidade
+    if (_orc.carregado && perfil.unidade_id && dados.valor_estimado > _orc.disponivelParaEsta) {
+      showToast('Valor estimado (' + formatMoeda(dados.valor_estimado) +
+        ') excede o orçamento disponível da unidade (' + formatMoeda(Math.max(_orc.disponivelParaEsta, 0)) + ').', 'error');
+      return;
+    }
 
     const btn = status === 'rascunho'
       ? document.getElementById('btn-salvar-rascunho')
