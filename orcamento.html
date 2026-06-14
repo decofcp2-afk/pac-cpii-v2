@@ -38,10 +38,10 @@
       <table>
         <thead><tr>
           <th>Descrição</th><th class="col-num">Valor total</th>
-          <th class="col-num">Distribuído</th><th class="col-num">Saldo</th><th class="col-actions">Ações</th>
+          <th class="col-num">Distribuído</th><th class="col-num">Em demandas</th><th class="col-num">Saldo</th><th class="col-actions">Ações</th>
         </tr></thead>
         <tbody id="tbody-dotacoes">
-          <tr><td colspan="5"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>
+          <tr><td colspan="6"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>
         </tbody>
       </table>
     </div>
@@ -174,7 +174,7 @@
 
   async function carregarDotacoes(exercicio) {
     const tbody = document.getElementById('tbody-dotacoes');
-    tbody.innerHTML = '<tr><td colspan="5"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6"><div class="loading-overlay"><span class="spinner"></span></div></td></tr>';
     try {
       const todas = await listarDotacoes(perfil.campus_id, exercicio);
       _dotacoes = todas; // todas as dotações do campus
@@ -194,7 +194,7 @@
       cardDist.style.display = _filhos.length > 0 && _dotacoes.length > 0 ? '' : 'none';
 
       if (_dotacoes.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
           <div class="empty-icon">💰</div>
           <h3>Nenhuma dotação cadastrada</h3>
           <p>Crie uma dotação para este exercício usando o botão acima.</p>
@@ -204,7 +204,16 @@
         _dists = await listarDistribuicoes(perfil.campus_id, exercicio);
         const childIds = _filhos.map(f => f.id);
 
-        // Para cada dotação: base distribuível desta unidade e quanto já foi repassado aos filhos
+        // Demandas já incluídas por ESTA unidade consomem parte do recebido (reduzem o distribuível)
+        let demandasProprias = 0;
+        if (perfil.unidade_id) {
+          const minhasDemandas = await listarDemandasDaUnidade(perfil.unidade_id, exercicio);
+          demandasProprias = (minhasDemandas || [])
+            .filter(dm => dm.status !== 'reprovada')
+            .reduce((s, dm) => s + Number(dm.valor_estimado || 0), 0);
+        }
+
+        // Para cada dotação: base recebida, reserva nas demandas próprias e repasse aos filhos
         const rows = _dotacoes.map(d => {
           const distDot = _dists.filter(x => x.dotacao_id === d.id);
           // Base: o que ESTA unidade recebeu (chefia/seção) ou o total da dotação (Reitoria/ordenador)
@@ -213,8 +222,10 @@
             : Number(d.valor_total);
           // Já distribuído: somatório repassado às minhas unidades filhas diretas
           const distribuido = distDot.filter(x => childIds.includes(x.unidade_id)).reduce((s,x) => s+Number(x.valor), 0);
-          const saldo = base - distribuido;
-          return { ...d, base, distribuido, saldo };
+          // Distribuível = recebido − reservado nas demandas da própria unidade
+          const distribuivel = base - demandasProprias;
+          const saldo = distribuivel - distribuido;
+          return { ...d, base, demandasProprias, distribuivel, distribuido, saldo };
         });
         _dotacoes = rows;
 
@@ -222,6 +233,7 @@
           <td>${d.descricao || '—'}</td>
           <td class="col-num">${formatMoeda(d.base)}</td>
           <td class="col-num">${formatMoeda(d.distribuido)}</td>
+          <td class="col-num">${formatMoeda(d.demandasProprias)}</td>
           <td class="col-num" style="font-weight:600;color:${d.saldo<0?'#EF4444':'#166534'}">${formatMoeda(d.saldo)}</td>
           <td class="col-actions">
             <button class="btn btn-sm btn-secondary" onclick="prepDistribuir('${d.id}')">Distribuir</button>
@@ -281,9 +293,9 @@
     })).filter(x => x.valor > 0);
 
     const totalNovo = distribuicoes.reduce((s,x) => s+x.valor, 0);
-    // O total não pode exceder o que esta unidade recebeu (ou o total da dotação, no caso da Reitoria)
-    if (totalNovo > dot.base) {
-      showToast(`Valor total (${formatMoeda(totalNovo)}) excede o disponível para distribuir (${formatMoeda(dot.base)}).`, 'error');
+    // O total não pode exceder o disponível (recebido − reservado nas demandas da própria unidade)
+    if (totalNovo > dot.distribuivel) {
+      showToast(`Valor total (${formatMoeda(totalNovo)}) excede o disponível para distribuir (${formatMoeda(dot.distribuivel)}).`, 'error');
       return;
     }
     if (distribuicoes.length === 0) { showToast('Informe ao menos um valor.', 'error'); return; }
