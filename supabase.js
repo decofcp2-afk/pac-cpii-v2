@@ -412,14 +412,21 @@ async function listarCampiPublico() {
 }
 
 async function listarExerciciosPublicos(campusId) {
+  // Exercícios com demandas homologadas OU rejeitadas (via view pública)
   const { data, error } = await db
-    .from('demandas')
+    .from('vw_demandas_publicas')
     .select('exercicio')
-    .eq('campus_id', campusId)
-    .eq('status', 'homologada');
+    .eq('campus_id', campusId);
   if (error) throw error;
-  const anos = [...new Set(data.map(function (d) { return d.exercicio; }))].sort(function (a, b) { return b - a; });
+  const anos = [...new Set((data || []).map(function (d) { return d.exercicio; }))].sort(function (a, b) { return b - a; });
   return anos;
+}
+
+/* Demandas públicas detalhadas (homologadas + rejeitadas), com de acordo / motivo */
+async function listarDemandasPublicasDetalhe(campusId, exercicio) {
+  let q = db.from('vw_demandas_publicas').select('*').eq('campus_id', campusId);
+  if (exercicio) q = q.eq('exercicio', exercicio);
+  return _check(await q.order('gut_prioridade', { ascending: true, nullsFirst: false }));
 }
 
 /* Orçamento público (transparência) — requer leitura anônima de dotacoes/distribuicoes */
