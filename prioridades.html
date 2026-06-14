@@ -34,10 +34,50 @@
     </div>
   </div>
 
-  <div class="alert alert-info">
-    <strong>Matriz GUT:</strong> G = Gravidade | U = Urgência | T = Tendência. Escala de 1 a 5.
-    Total = G × U × T (máx. 125). A tabela é reordenada automaticamente ao salvar.
+  <div class="form-grid form-grid-3" style="margin-bottom:16px">
+    <div class="card" style="margin:0">
+      <div class="card-title" style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;font-weight:700;background:#FDE8E8;color:#B91C1C">G</span>
+        GRAVIDADE
+      </div>
+      <div class="gut-row"><span class="gut-n" style="background:#991B1B">5</span><span>Impede completamente o funcionamento da unidade</span></div>
+      <div class="gut-row"><span class="gut-n" style="background:#DC2626">4</span><span>Causa grande prejuízo operacional ou risco legal</span></div>
+      <div class="gut-row"><span class="gut-n" style="background:#C9922A">3</span><span>Prejudica parcialmente as atividades</span></div>
+      <div class="gut-row"><span class="gut-n" style="background:#16A34A">2</span><span>Causa pequeno transtorno, contornável</span></div>
+      <div class="gut-row"><span class="gut-n" style="background:#9CA3AF">1</span><span>Pouco ou nenhum impacto nas atividades</span></div>
+    </div>
+    <div class="card" style="margin:0">
+      <div class="card-title" style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;font-weight:700;background:#FDF3E3;color:#B45309">U</span>
+        URGÊNCIA
+      </div>
+      <div class="gut-row"><span class="gut-n" style="background:#991B1B">5</span><span>Precisa ser resolvido imediatamente (dias)</span></div>
+      <div class="gut-row"><span class="gut-n" style="background:#DC2626">4</span><span>Precisa ser resolvido em poucas semanas</span></div>
+      <div class="gut-row"><span class="gut-n" style="background:#C9922A">3</span><span>Pode aguardar alguns meses</span></div>
+      <div class="gut-row"><span class="gut-n" style="background:#16A34A">2</span><span>Pode aguardar até o fim do exercício</span></div>
+      <div class="gut-row"><span class="gut-n" style="background:#9CA3AF">1</span><span>Pode ser resolvido quando conveniente</span></div>
+    </div>
+    <div class="card" style="margin:0">
+      <div class="card-title" style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;font-weight:700;background:#E0EAFB;color:#1A3A6B">T</span>
+        TENDÊNCIA
+      </div>
+      <div class="gut-row"><span class="gut-n" style="background:#991B1B">5</span><span>Piorará muito rapidamente sem ação imediata</span></div>
+      <div class="gut-row"><span class="gut-n" style="background:#DC2626">4</span><span>Piorará em curto prazo (semanas)</span></div>
+      <div class="gut-row"><span class="gut-n" style="background:#C9922A">3</span><span>Piorará em médio prazo (meses)</span></div>
+      <div class="gut-row"><span class="gut-n" style="background:#16A34A">2</span><span>Piorará lentamente em longo prazo</span></div>
+      <div class="gut-row"><span class="gut-n" style="background:#9CA3AF">1</span><span>Não tende a piorar se não tratado</span></div>
+    </div>
   </div>
+
+  <div class="alert alert-info">
+    <strong>Total GUT = G × U × T</strong> (máx. 125). A tabela é reordenada automaticamente por prioridade ao salvar.
+  </div>
+
+  <style>
+    .gut-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px solid var(--cinza-borda); font-size:13px; }
+    .gut-n { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:5px; color:#fff; font-weight:700; font-size:12px; flex:0 0 auto; }
+  </style>
 
   <div class="card">
     <div class="table-wrap">
