@@ -74,12 +74,12 @@
   // Configurar título e subtítulo conforme papel
   if (papel === 'chefia') {
     document.getElementById('titulo-pagina').textContent = 'Aprovações';
-    document.getElementById('card-titulo').textContent = 'Demandas submetidas aguardando aprovação';
+    document.getElementById('card-titulo').textContent = 'Demandas das unidades subordinadas aguardando seu de acordo';
     document.getElementById('subtitulo').textContent =
-      'Campus: ' + (perfil.campus ? perfil.campus.nome : '—');
+      'Unidade: ' + (perfil.unidade ? perfil.unidade.nome : (perfil.campus ? perfil.campus.nome : '—'));
   } else if (papel === 'ord_despesas') {
-    document.getElementById('titulo-pagina').textContent = 'Demandas aprovadas';
-    document.getElementById('card-titulo').textContent = 'Demandas aprovadas pela chefia (de acordo)';
+    document.getElementById('titulo-pagina').textContent = 'Aprovações';
+    document.getElementById('card-titulo').textContent = 'Demandas das unidades de topo aguardando seu de acordo';
     document.getElementById('subtitulo').textContent =
       'Campus: ' + (perfil.campus ? perfil.campus.nome : '—');
   } else {
@@ -107,11 +107,15 @@
     try {
       let demandas;
       if (papel === 'chefia') {
-        // Chefia vê demandas submetidas do seu campus (campus_id, não unidade_id)
-        demandas = await listarDemandasDoCampus(perfil.campus_id, exercicio, 'submetida');
+        // Chefia dá o de acordo apenas nas demandas das suas unidades filhas diretas
+        const filhos = perfil.unidade_id ? await listarFilhosDiretos(perfil.unidade_id) : [];
+        const ids = filhos.map(function (f) { return f.id; });
+        demandas = ids.length ? await listarDemandasParaAprovacao(ids, exercicio) : [];
       } else if (papel === 'ord_despesas') {
-        // Ord. despesas vê demandas já aprovadas (de_acordo) do seu campus
-        demandas = await listarDemandasDoCampus(perfil.campus_id, exercicio, 'de_acordo');
+        // Ordenador dá o de acordo nas demandas das unidades de topo (sem chefia acima)
+        const todasUnidades = await listarUnidadesDoCampus(perfil.campus_id);
+        const ids = todasUnidades.filter(function (u) { return !u.parent_id; }).map(function (u) { return u.id; });
+        demandas = ids.length ? await listarDemandasParaAprovacao(ids, exercicio) : [];
       } else {
         // Licitações vê todas as demandas de_acordo (todos os campi)
         demandas = await listarTodasDemandas(exercicio, 'de_acordo');
@@ -119,8 +123,8 @@
 
       if (!demandas || demandas.length === 0) {
         var msgMap = {
-          chefia: 'Nenhuma demanda submetida pendente de aprovação.',
-          ord_despesas: 'Nenhuma demanda aprovada aguardando priorização.',
+          chefia: 'Nenhuma demanda das unidades subordinadas aguardando seu de acordo.',
+          ord_despesas: 'Nenhuma demanda de unidade de topo aguardando seu de acordo.',
           licitacoes: 'Nenhuma demanda aprovada no momento.'
         };
         tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">' +
@@ -176,13 +180,10 @@
       '</div>';
 
     var botoesHtml = '';
-    if (papel === 'chefia') {
+    if (papel === 'chefia' || papel === 'ord_despesas') {
+      // Chefia (filhas diretas) e ordenador (unidades de topo) dão o de acordo.
       botoesHtml += '<button class="btn btn-danger" onclick="reprovar(\'' + d.id + '\')">Reprovar</button>';
       botoesHtml += ' <button class="btn btn-primary" onclick="aprovar(\'' + d.id + '\')">Aprovar (de acordo)</button>';
-    } else if (papel === 'ord_despesas') {
-      // No fluxo isolado por campus, demandas "de acordo" seguem para a Priorização GUT.
-      botoesHtml += '<button class="btn btn-danger" onclick="reprovar(\'' + d.id + '\')">Reprovar</button>';
-      botoesHtml += ' <a class="btn btn-primary" href="prioridades.html">Ir para Priorização GUT →</a>';
     } else if (papel === 'licitacoes') {
       botoesHtml += '<button class="btn btn-secondary" onclick="reverterStatus(\'' + d.id + '\', \'submetida\')">Reverter p/ submetida</button>';
       botoesHtml += ' <a class="btn btn-primary" href="prioridades.html">Ir para Priorização GUT →</a>';

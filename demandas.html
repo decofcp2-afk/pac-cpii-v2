@@ -234,8 +234,9 @@
   buildSidebar(perfil);
   initUI();
 
-  const podeEditar = ['chefe_secao'].includes(perfil.papel);
-  const podeVerTudo = ['ord_despesas','chefia','licitacoes','administrador'].includes(perfil.papel);
+  // chefia e chefe_secao criam demandas da própria unidade ("Minhas Demandas")
+  const podeEditar = ['chefe_secao','chefia'].includes(perfil.papel);
+  const podeVerTudo = ['ord_despesas','licitacoes','administrador'].includes(perfil.papel);
   let demandaEditandoId = null;
   let exercicioAtual = new Date().getFullYear();
 
@@ -250,9 +251,7 @@
 
   if (podeEditar) {
     document.getElementById('btn-nova').style.display = '';
-    if (perfil.papel === 'chefe_secao') {
-      document.getElementById('titulo-lista').textContent = 'Minhas Demandas';
-    }
+    document.getElementById('titulo-lista').textContent = 'Minhas Demandas';
   }
 
   // Título e subtítulo
@@ -282,8 +281,10 @@
       let demandas;
       if (podeVerTudo) {
         demandas = await listarDemandasDoCampus(perfil.campus_id, exercicioAtual, status || undefined);
-      } else {
+      } else if (perfil.unidade_id) {
         demandas = await listarDemandasDaUnidade(perfil.unidade_id, exercicioAtual, status || undefined);
+      } else {
+        demandas = [];
       }
 
       if (busca) demandas = demandas.filter(d => d.descricao_objeto.toLowerCase().includes(busca));
