@@ -109,6 +109,13 @@
   buildSidebar(perfil);
   initUI();
 
+  // Apenas administrador e ordenador criam/excluem dotações; chefias apenas redistribuem.
+  const podeGerenciarDotacao = ['administrador','ord_despesas'].includes(perfil.papel);
+  if (!podeGerenciarDotacao) {
+    const btnNova = document.getElementById('btn-nova-dotacao');
+    if (btnNova) btnNova.style.display = 'none';
+  }
+
   const selEx = document.getElementById('sel-exercicio');
   const anoAtual = new Date().getFullYear();
   for (let a = anoAtual; a >= anoAtual-4; a--) {
@@ -158,6 +165,7 @@
 
   let _dotacoes = [];
   let _filhos = [];
+  let _dists = [];
 
   async function carregarTudo() {
     const exercicio = parseInt(selEx.value);
@@ -171,12 +179,14 @@
       const todas = await listarDotacoes(perfil.campus_id, exercicio);
       _dotacoes = todas; // todas as dotações do campus
 
-      // Carregar filhos para distribuição
-      // Para roles sem unidade_id (chefia, ord_despesas, licitacoes), listar todas as unidades do campus
+      // Carregar filhos diretos para distribuição
       if (perfil.unidade_id) {
+        // Chefia/seção: distribui apenas para suas unidades filhas diretas
         _filhos = await listarFilhosDiretos(perfil.unidade_id);
       } else if (perfil.campus_id) {
-        _filhos = await listarUnidadesDoCampus(perfil.campus_id);
+        // Ordenador/Reitoria (sem unidade): distribui para as unidades de topo do campus
+        const todasUnidades = await listarUnidadesDoCampus(perfil.campus_id);
+        _filhos = todasUnidades.filter(u => !u.parent_id);
       } else {
         _filhos = [];
       }
@@ -190,31 +200,39 @@
           <p>Crie uma dotação para este exercício usando o botão acima.</p>
         </div></td></tr>`;
       } else {
-        // Calcular saldos
-        const rows = await Promise.all(_dotacoes.map(async d => {
-          const dists = await listarDistribuicoes(perfil.campus_id, exercicio);
-          const distDot = dists.filter(x => x.dotacao_id === d.id);
-          const distribuido = distDot.reduce((s,x) => s+Number(x.valor), 0);
-          const saldo = Number(d.valor_total) - distribuido;
-          return { ...d, distribuido, saldo };
-        }));
+        // Carrega todas as distribuições do campus/exercício de uma só vez
+        _dists = await listarDistribuicoes(perfil.campus_id, exercicio);
+        const childIds = _filhos.map(f => f.id);
+
+        // Para cada dotação: base distribuível desta unidade e quanto já foi repassado aos filhos
+        const rows = _dotacoes.map(d => {
+          const distDot = _dists.filter(x => x.dotacao_id === d.id);
+          // Base: o que ESTA unidade recebeu (chefia/seção) ou o total da dotação (Reitoria/ordenador)
+          const base = perfil.unidade_id
+            ? distDot.filter(x => x.unidade_id === perfil.unidade_id).reduce((s,x) => s+Number(x.valor), 0)
+            : Number(d.valor_total);
+          // Já distribuído: somatório repassado às minhas unidades filhas diretas
+          const distribuido = distDot.filter(x => childIds.includes(x.unidade_id)).reduce((s,x) => s+Number(x.valor), 0);
+          const saldo = base - distribuido;
+          return { ...d, base, distribuido, saldo };
+        });
         _dotacoes = rows;
 
         tbody.innerHTML = rows.map(d => `<tr>
           <td>${d.descricao || '—'}</td>
-          <td class="col-num">${formatMoeda(d.valor_total)}</td>
+          <td class="col-num">${formatMoeda(d.base)}</td>
           <td class="col-num">${formatMoeda(d.distribuido)}</td>
           <td class="col-num" style="font-weight:600;color:${d.saldo<0?'#EF4444':'#166534'}">${formatMoeda(d.saldo)}</td>
           <td class="col-actions">
             <button class="btn btn-sm btn-secondary" onclick="prepDistribuir('${d.id}')">Distribuir</button>
-            <button class="btn btn-sm btn-danger" onclick="excluirDot('${d.id}')">Excluir</button>
+            ${podeGerenciarDotacao ? `<button class="btn btn-sm btn-danger" onclick="excluirDot('${d.id}')">Excluir</button>` : ''}
           </td>
         </tr>`).join('');
 
         // Popular select de distribuição
         const sel = document.getElementById('sel-dotacao-dist');
         sel.innerHTML = _dotacoes.map(d => `<option value="${d.id}">${d.descricao || 'Dotação'} (saldo: ${formatMoeda(d.saldo)})</option>`).join('');
-        sel.addEventListener('change', atualizarSaldoDisplay);
+        sel.onchange = function () { atualizarSaldoDisplay(); renderFormDistribuicao(); };
         atualizarSaldoDisplay();
         renderFormDistribuicao();
       }
@@ -229,19 +247,26 @@
 
   function renderFormDistribuicao() {
     const container = document.getElementById('form-distribuicoes');
-    container.innerHTML = _filhos.map(f => `
+    const dotId = document.getElementById('sel-dotacao-dist').value;
+    container.innerHTML = _filhos.map(f => {
+      // Pré-preenche com a distribuição já existente desta unidade filha (se houver)
+      const existente = _dists.find(x => x.dotacao_id === dotId && x.unidade_id === f.id);
+      const valorAtual = existente ? Number(existente.valor) : '';
+      return `
       <div class="form-grid form-grid-2" style="align-items:center;margin-bottom:10px">
         <div style="font-size:13px;font-weight:500">${f.nome} (${f.sigla})</div>
         <div class="form-group">
           <input type="number" id="dist-${f.id}" min="0" step="0.01" placeholder="R$ 0,00"
-            data-unidade="${f.id}" style="width:100%">
+            value="${valorAtual}" data-unidade="${f.id}" style="width:100%">
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
   window.prepDistribuir = function (dotId) {
     document.getElementById('sel-dotacao-dist').value = dotId;
     atualizarSaldoDisplay();
+    renderFormDistribuicao();
     document.getElementById('card-distribuir').scrollIntoView({behavior:'smooth'});
   };
 
@@ -250,19 +275,26 @@
     const dot = _dotacoes.find(d => d.id === dotId);
     if (!dot) return;
 
+    // Valores informados por unidade filha (substituem as distribuições anteriores desta dotação)
     const distribuicoes = _filhos.map(f => ({
       unidade: f, valor: parseFloat(document.getElementById('dist-'+f.id).value) || 0
     })).filter(x => x.valor > 0);
 
     const totalNovo = distribuicoes.reduce((s,x) => s+x.valor, 0);
-    if (totalNovo > dot.saldo) {
-      showToast(`Valor total (${formatMoeda(totalNovo)}) excede o saldo disponível (${formatMoeda(dot.saldo)}).`, 'error');
+    // O total não pode exceder o que esta unidade recebeu (ou o total da dotação, no caso da Reitoria)
+    if (totalNovo > dot.base) {
+      showToast(`Valor total (${formatMoeda(totalNovo)}) excede o disponível para distribuir (${formatMoeda(dot.base)}).`, 'error');
       return;
     }
     if (distribuicoes.length === 0) { showToast('Informe ao menos um valor.', 'error'); return; }
 
     setLoading(this, true);
     try {
+      // Remove as distribuições anteriores desta dotação para minhas unidades filhas e recria
+      const atuais = _dists.filter(x => x.dotacao_id === dotId && _filhos.some(f => f.id === x.unidade_id));
+      for (const ex of atuais) {
+        await excluirDistribuicao(ex.id);
+      }
       for (const d of distribuicoes) {
         await criarDistribuicao({
           dotacao_id: dotId,

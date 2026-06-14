@@ -309,7 +309,7 @@ create policy "distribuicoes_insert" on distribuicoes
   for insert with check (
     get_meu_papel() = 'administrador'
     or (
-      get_meu_papel() in ('ord_despesas', 'licitacoes')
+      get_meu_papel() in ('ord_despesas', 'licitacoes', 'chefia')
       and exists (
         select 1 from dotacoes d
         where d.id = dotacao_id and d.campus_id = get_meu_campus_id()
@@ -321,7 +321,7 @@ create policy "distribuicoes_delete" on distribuicoes
   for delete using (
     get_meu_papel() = 'administrador'
     or (
-      get_meu_papel() in ('ord_despesas', 'licitacoes')
+      get_meu_papel() in ('ord_despesas', 'licitacoes', 'chefia')
       and exists (
         select 1 from dotacoes d
         where d.id = dotacao_id and d.campus_id = get_meu_campus_id()
